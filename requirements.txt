@@ -1,0 +1,7 @@
+openai-whisper
+sounddevice
+openWakeWord
+rapidfuzz
+pyttsx3
+ollama
+pyautogui

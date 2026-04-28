@@ -1,0 +1,9 @@
+{
+  "assistant_name": "Jarvis",
+  "wake_word_threshold": 0.80,
+  "tts_speed": 1.0,
+  "llm_provider": "ollama",
+  "llm_model": "gemma3",
+  "offline_mode": true,
+  "custom_commands": {}
+}
