@@ -81,6 +81,18 @@ def play_song(query: str) -> str:
 def play_playlist(query: str) -> str:
     sp = get_spotify()
 
+    # Liked songs shortcut
+    if any(x in query.lower() for x in ["liked songs", "liked music", "my songs", "saved songs"]):
+        os.startfile("spotify:collection")
+        if PYAUTOGUI_AVAILABLE:
+            time.sleep(3.5)
+            pyautogui.press("tab")
+            time.sleep(0.2)
+            pyautogui.press("enter")
+            time.sleep(0.2)
+            pyautogui.press("enter")
+        return "Playing your Liked Songs."
+
     # Premium path
     if sp:
         try:
