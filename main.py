@@ -1,5 +1,7 @@
 import os
 import re
+import time
+import threading
 import skills.app_launcher as al
 from groq import Groq
 from skills.app_launcher import open_app, open_website, close_app, launch_steam_game, search_youtube
@@ -7,6 +9,7 @@ from skills.spotify_control import play_song, play_playlist, get_current_song
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
     media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
+from ui import JarvisUI
 
 try:
     import speech_recognition as sr
@@ -24,15 +27,16 @@ APP_PRIORITY = ["spotify", "discord", "steam", "roblox", "minecraft",
 
 recognizer = sr.Recognizer() if VOICE_AVAILABLE else None
 
-def speak(text):
+def speak(text, ui=None):
     print(f"\n{ASSISTANT_NAME}: {text}\n")
+    if ui:
+        ui.set_state("speaking", text)
 
 def extract_number(text):
     match = re.search(r'\b(\d+)\b', text)
     return int(match.group(1)) if match else None
 
 def listen_for_wake_word() -> bool:
-    """Passively listen until wake word is detected. Returns True when heard."""
     with sr.Microphone() as source:
         recognizer.adjust_for_ambient_noise(source, duration=0.2)
         while True:
@@ -47,11 +51,9 @@ def listen_for_wake_word() -> bool:
             except sr.UnknownValueError:
                 continue
             except sr.RequestError:
-                speak("Voice service unavailable.")
                 return False
 
 def listen_for_command() -> str:
-    """After wake word — listen for the actual command."""
     with sr.Microphone() as source:
         print("Listening for command...")
         recognizer.adjust_for_ambient_noise(source, duration=0.2)
@@ -61,13 +63,10 @@ def listen_for_command() -> str:
             print(f"You: {text}")
             return text
         except sr.WaitTimeoutError:
-            speak("I didn't catch that.")
             return ""
         except sr.UnknownValueError:
-            speak("Couldn't understand that.")
             return ""
         except sr.RequestError:
-            speak("Voice service unavailable.")
             return ""
 
 def handle_command(text: str):
@@ -257,22 +256,25 @@ def ask_llm(user_input):
     conversation_history.append({"role": "assistant", "content": reply})
     return reply
 
-if __name__ == "__main__":
-    if not VOICE_AVAILABLE:
-        print("speech_recognition not installed — falling back to text input.")
-        print("Run: pip install SpeechRecognition pyaudio\n")
-
-    speak(f"{ASSISTANT_NAME} online. Say 'Hey Jarvis' to wake me up.")
+def main_loop(ui: JarvisUI):
+    speak(f"{ASSISTANT_NAME} online. Say 'Hey Jarvis' to wake me up.", ui)
+    time.sleep(2)
 
     while True:
+        ui.set_state("sleeping")
+
         if VOICE_AVAILABLE:
             print("[waiting for wake word...]")
             woke = listen_for_wake_word()
             if not woke:
                 continue
-            speak("Yeah?")
+
+            ui.set_state("listening")
+            speak("Yeah?", ui)
+
             user_input = listen_for_command()
             if not user_input:
+                ui.set_state("sleeping")
                 continue
         else:
             user_input = input("You: ").strip()
@@ -280,12 +282,26 @@ if __name__ == "__main__":
                 continue
 
         if user_input.lower() in ["exit", "goodbye", "quit", "shut down jarvis"]:
-            speak("Goodbye!")
+            speak("Goodbye!", ui)
+            time.sleep(1)
+            ui.root.quit()
             break
 
+        ui.set_state("thinking")
         result = handle_command(user_input)
+
         if result:
-            speak(result)
+            speak(result, ui)
         else:
             reply = ask_llm(user_input)
-            speak(reply)
+            speak(reply, ui)
+
+        time.sleep(2)
+
+if __name__ == "__main__":
+    if not VOICE_AVAILABLE:
+        print("speech_recognition not installed — run: pip install SpeechRecognition pyaudio\n")
+
+    ui = JarvisUI()
+    threading.Thread(target=main_loop, args=(ui,), daemon=True).start()
+    ui.start()  # tkinter mainloop must run on main thread
