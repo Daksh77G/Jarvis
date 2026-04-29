@@ -5,9 +5,9 @@ import threading
 import skills.app_launcher as al
 from groq import Groq
 from skills.app_launcher import open_app, open_website, close_app, launch_steam_game, search_youtube
-from skills.spotify_control import (play_song, play_playlist, get_current_song,
-                                     media_play_pause, media_next, media_previous)
+from skills.spotify_control import play_song, play_playlist, get_current_song
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
+    media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
 from ui import JarvisUI
 
@@ -268,10 +268,8 @@ def main_loop(ui: JarvisUI):
             woke = listen_for_wake_word()
             if not woke:
                 continue
-
             ui.set_state("listening")
             speak("Yeah?", ui)
-
             user_input = listen_for_command()
             if not user_input:
                 ui.set_state("sleeping")

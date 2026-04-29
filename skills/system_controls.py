@@ -37,8 +37,31 @@ def set_volume(level: int) -> str:
         return f"Couldn't set volume: {e}"
 
 
-# media_play_pause, media_next, media_previous removed —
-# now handled directly via Spotify API in spotify_control.py
+def media_play_pause() -> str:
+    subprocess.run(["powershell", "-command",
+        "$wsh = New-Object -ComObject WScript.Shell; "
+        "$wsh.AppActivate('Spotify'); "
+        "Start-Sleep -Milliseconds 300; "
+        "$wsh.SendKeys(' ')"])
+    return "Toggled play/pause."
+
+
+def media_next() -> str:
+    subprocess.run(["powershell", "-command",
+        "$wsh = New-Object -ComObject WScript.Shell; "
+        "$wsh.AppActivate('Spotify'); "
+        "Start-Sleep -Milliseconds 300; "
+        "$wsh.SendKeys('^{RIGHT}')"])
+    return "Skipped to next track."
+
+
+def media_previous() -> str:
+    subprocess.run(["powershell", "-command",
+        "$wsh = New-Object -ComObject WScript.Shell; "
+        "$wsh.AppActivate('Spotify'); "
+        "Start-Sleep -Milliseconds 300; "
+        "$wsh.SendKeys('^{LEFT}')"])
+    return "Went to previous track."
 
 
 def shutdown(delay: int = 10) -> str:
