@@ -2,8 +2,8 @@ import os
 import re
 import skills.app_launcher as al
 from groq import Groq
-from skills.app_launcher import (open_app, open_website, close_app,
-                                  launch_steam_game, search_youtube, search_spotify)
+from skills.app_launcher import open_app, open_website, close_app, launch_steam_game, search_youtube
+from skills.spotify_control import play_song, play_playlist, get_current_song
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
     media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
@@ -50,6 +50,11 @@ def handle_command(text: str):
     if any(x in t for x in ["previous song", "last song", "go back track"]):
         return media_previous()
 
+    # --- What's playing ---
+    if any(x in t for x in ["what song", "what's playing", "whats playing",
+                              "current song", "what is this song"]):
+        return get_current_song()
+
     # --- Screenshot ---
     if "screenshot" in t or "screen capture" in t:
         return take_screenshot()
@@ -86,57 +91,58 @@ def handle_command(text: str):
         if app:
             return close_app(app)
 
-    # --- Subreddit shortcut: "open r/DayTrading" ---
+    # --- Subreddit shortcut ---
     subreddit_match = re.search(r'r/(\w+)', t)
     if subreddit_match:
-        sub = subreddit_match.group(1)
-        return open_website(f"reddit.com/r/{sub}")
+        return open_website(f"reddit.com/r/{subreddit_match.group(1)}")
 
-    # --- Spotify: play song or playlist ---
-    # "play First Person Shooter on spotify" / "play X by Drake on spotify"
+    # --- Spotify: playlist ---
+    playlist_match = re.search(r'(?:play|start|put on) (.+?) playlist', t)
+    if playlist_match:
+        return play_playlist(playlist_match.group(1).strip())
+
+    # --- Spotify: "play X on spotify" ---
     spotify_explicit = re.search(
-        r'(?:play|listen to|put on|search) (.+?) (?:on spotify|in spotify|on repeat)', t)
+        r'(?:play|listen to|put on|search) (.+?) (?:on spotify|in spotify)', t)
     if spotify_explicit:
-        query = spotify_explicit.group(1).strip()
-        return search_spotify(query)
+        return play_song(spotify_explicit.group(1).strip())
 
-    # "play [song] by [artist]" → assume Spotify
+    # --- Spotify: "play X by Y" ---
     spotify_by = re.search(r'play (.+?) by (.+)', t)
-    if spotify_by and not any(x in t for x in ["game", "steam", "launch"]):
+    if spotify_by and not any(x in t for x in ["game", "steam", "launch", "video", "youtube"]):
         song = spotify_by.group(1).strip()
         artist = spotify_by.group(2).strip()
-        return search_spotify(f"{song} {artist}")
+        return play_song(f"{song} {artist}")
 
-    # --- YouTube: specific video or search ---
-    # "play MrBeast's latest video" / "find a video about X"
+    # --- YouTube: latest video ---
     yt_play = re.search(
-        r'(?:play|find|show|watch) (.+?)(?:\'s)? (?:latest |most recent |new )?(?:video|videos|youtube)', t)
+        r'(?:play|find|show|watch) (.+?)(?:\'s)? (?:latest |most recent |new )?(?:video|videos)', t)
     if yt_play:
-        query = yt_play.group(1).strip()
-        return search_youtube(f"{query} latest", first_result=True)
+        return search_youtube(f"{yt_play.group(1).strip()} latest")
 
-    yt_help = re.search(r'(?:find|show|search) (?:a |me a )?video (?:about|on|for|that|to help) (.+)', t)
+    # --- YouTube: help video ---
+    yt_help = re.search(
+        r'(?:find|show|search) (?:a |me a )?video (?:about|on|for|that|to help) (.+)', t)
     if yt_help:
-        query = yt_help.group(1).strip()
-        return search_youtube(query)
+        return search_youtube(yt_help.group(1).strip())
 
-    # "search X on youtube" / "look up X on youtube"
+    # --- YouTube: search ---
     yt_search = re.search(r'(?:search|find|look up) (.+?) on youtube', t)
     if yt_search:
-        query = yt_search.group(1).strip()
-        return search_youtube(query)
+        return search_youtube(yt_search.group(1).strip())
 
-    # --- YouTube channel ---
-    yt_channel = re.search(r'open (.+?)(?:\'s)? (?:youtube channel|yt channel|channel on youtube)', t)
+    # --- YouTube: channel ---
+    yt_channel = re.search(
+        r'open (.+?)(?:\'s)? (?:youtube channel|yt channel|channel on youtube)', t)
     if yt_channel:
-        query = yt_channel.group(1).strip().replace(" ", "+")
-        return open_website(f"youtube.com/results?search_query={query}+channel")
+        q = yt_channel.group(1).strip().replace(" ", "+")
+        return open_website(f"youtube.com/results?search_query={q}+channel")
 
     # --- Google search ---
     google_match = re.search(r'^(?:google|search for|search) (.+)', t)
     if google_match and not any(x in t for x in ["game", "steam", "youtube"]):
-        query = google_match.group(1).strip().replace(" ", "+")
-        return open_website(f"google.com/search?q={query}")
+        q = google_match.group(1).strip().replace(" ", "+")
+        return open_website(f"google.com/search?q={q}")
 
     # --- Websites ---
     website_triggers = [".com", ".org", ".net", ".io", ".tv",
@@ -149,10 +155,11 @@ def handle_command(text: str):
                 if "." in clean or clean in website_triggers:
                     return open_website(clean)
 
-    # --- Steam Games (play/run/launch/start) ---
+    # --- Steam Games ---
     if re.search(r'\b(play|launch|run|start)\b', t):
         if not any(x in t for x in ["music", "song", "track", "media",
-                                     "spotify", "youtube", "video", "by "]):
+                                     "spotify", "youtube", "video", "by ",
+                                     "playlist"]):
             app = re.sub(r'\b(play|launch|run|start)\b', '', t).strip()
             if app:
                 result = launch_steam_game(app)
@@ -176,7 +183,7 @@ def ask_llm(user_input):
         messages=[
             {"role": "system", "content": (
                 f"You are {ASSISTANT_NAME}, a voice-controlled desktop AI assistant. "
-                f"You can open apps, websites, control volume, and answer questions. "
+                f"You can open apps, websites, control volume, play Spotify songs, and answer questions. "
                 f"When asked to DO something on the computer, confirm you're doing it — don't give instructions. "
                 f"Keep responses short and conversational. "
                 f"Your detected Steam games are: {game_list}. "
