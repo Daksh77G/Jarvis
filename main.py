@@ -5,9 +5,9 @@ import threading
 import skills.app_launcher as al
 from groq import Groq
 from skills.app_launcher import open_app, open_website, close_app, launch_steam_game, search_youtube
-from skills.spotify_control import play_song, play_playlist, get_current_song
+from skills.spotify_control import (play_song, play_playlist, get_current_song,
+                                     media_play_pause, media_next, media_previous)
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
-    media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
 from ui import JarvisUI
 
@@ -304,4 +304,4 @@ if __name__ == "__main__":
 
     ui = JarvisUI()
     threading.Thread(target=main_loop, args=(ui,), daemon=True).start()
-    ui.start()  # tkinter mainloop must run on main thread
+    ui.start()

@@ -15,6 +15,13 @@ try:
 except ImportError:
     SPOTIPY_AVAILABLE = False
 
+try:
+    from pynput.keyboard import Key, Controller
+    _kb = Controller()
+    PYNPUT_AVAILABLE = True
+except ImportError:
+    PYNPUT_AVAILABLE = False
+
 _sp = None
 
 def get_spotify():
@@ -35,11 +42,10 @@ def get_spotify():
         return None
 
 def _spotify_play_song(query: str):
-    """Specific song — escape, tab, enter, enter"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
-        time.sleep(3.5)        # wait for Spotify to load
+        time.sleep(3.5)
         pyautogui.press("escape")
         time.sleep(0.05)
         pyautogui.press("tab")
@@ -49,26 +55,68 @@ def _spotify_play_song(query: str):
         pyautogui.press("enter")
 
 def _spotify_play_playlist(query: str):
-    """Playlist/genre — escape, tab, enter, wait, tab, tab, enter"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
-        time.sleep(3.5)        # wait for Spotify to load
+        time.sleep(3.5)
         pyautogui.press("escape")
         time.sleep(0.05)
         pyautogui.press("tab")
         time.sleep(0.05)
         pyautogui.press("enter")
-        time.sleep(1.0)        # wait for playlist page to load
+        time.sleep(1.0)
         pyautogui.press("tab")
         time.sleep(0.05)
         pyautogui.press("tab")
         time.sleep(0.05)
         pyautogui.press("enter")
-        
+
+def _media_key(key):
+    """Press a media key via pynput — works globally without focus."""
+    if PYNPUT_AVAILABLE:
+        _kb.press(key)
+        _kb.release(key)
+
+def media_play_pause() -> str:
+    sp = get_spotify()
+    if sp:
+        try:
+            current = sp.current_playback()
+            if current and current.get("is_playing"):
+                sp.pause_playback()
+                return "Paused."
+            else:
+                sp.start_playback()
+                return "Resumed."
+        except Exception:
+            pass
+    _media_key(Key.media_play_pause)
+    return "Toggled play/pause."
+
+def media_next() -> str:
+    sp = get_spotify()
+    if sp:
+        try:
+            sp.next_track()
+            return "Skipped to next track."
+        except Exception:
+            pass
+    _media_key(Key.media_next)
+    return "Skipped to next track."
+
+def media_previous() -> str:
+    sp = get_spotify()
+    if sp:
+        try:
+            sp.previous_track()
+            return "Went to previous track."
+        except Exception:
+            pass
+    _media_key(Key.media_previous)
+    return "Went to previous track."
+
 def play_song(query: str) -> str:
     sp = get_spotify()
-
     if sp:
         try:
             results = sp.search(q=query, type="track", limit=1)
@@ -90,13 +138,11 @@ def play_song(query: str) -> str:
             return f"Playing '{track_name}' on Spotify."
         except Exception:
             pass
-
     _spotify_play_song(query)
     return f"Playing '{query}' on Spotify."
 
 def play_playlist(query: str) -> str:
     sp = get_spotify()
-
     if sp:
         try:
             results = sp.search(q=query, type="playlist", limit=1)
@@ -118,8 +164,6 @@ def play_playlist(query: str) -> str:
             return f"Playing playlist '{playlist_name}'."
         except Exception:
             pass
-
-    # Free path — search everything including liked songs as a playlist
     _spotify_play_playlist(query)
     return f"Playing '{query}' on Spotify."
 

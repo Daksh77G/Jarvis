@@ -1,7 +1,6 @@
 import subprocess
 import os
 import datetime
-import pyautogui
 
 
 def volume_up() -> str:
@@ -38,19 +37,8 @@ def set_volume(level: int) -> str:
         return f"Couldn't set volume: {e}"
 
 
-def media_play_pause() -> str:
-    pyautogui.press("playpause")
-    return "Toggled play/pause."
-
-
-def media_next() -> str:
-    pyautogui.press("nexttrack")
-    return "Skipped to next track."
-
-
-def media_previous() -> str:
-    pyautogui.press("prevtrack")
-    return "Went to previous track."
+# media_play_pause, media_next, media_previous removed —
+# now handled directly via Spotify API in spotify_control.py
 
 
 def shutdown(delay: int = 10) -> str:
