@@ -109,30 +109,69 @@ def get_app_search_dirs() -> list:
 
 def get_all_steam_games() -> dict:
     games = {}
+
     for library in get_steam_library_paths():
         if not os.path.exists(library):
             continue
         print(f"  Scanning: {library}")
+
+        # Method 1: Read Steam .acf manifest files (most reliable)
+        steamapps_dir = os.path.dirname(library)  # go up from /common to /steamapps
+        try:
+            for acf_file in glob.glob(os.path.join(steamapps_dir, "*.acf")):
+                try:
+                    with open(acf_file, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    # Extract game name and install dir
+                    name_match = re.search(r'"name"\s+"([^"]+)"', content)
+                    dir_match = re.search(r'"installdir"\s+"([^"]+)"', content)
+                    if name_match and dir_match:
+                        game_name = name_match.group(1)
+                        install_dir = dir_match.group(1)
+                        folder_path = os.path.join(library, install_dir)
+                        if not os.path.exists(folder_path):
+                            continue
+                        # Search up to 3 levels deep for main exe
+                        exes = []
+                        for depth_path in [
+                            f"{folder_path}/*.exe",
+                            f"{folder_path}/**/*.exe",
+                        ]:
+                            exes += [f for f in glob.glob(depth_path, recursive=True)
+                                     if is_safe_exe(f)]
+                        if exes:
+                            main_exe = max(exes, key=os.path.getsize)
+                            games[game_name.lower()] = main_exe
+                            print(f"    + {game_name}")
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        # Method 2: Fallback — scan game folders directly
         for game_folder in os.listdir(library):
             folder_path = os.path.join(library, game_folder)
             if not os.path.isdir(folder_path):
                 continue
-            # Root folder first
-            exes = [f for f in glob.glob(f"{folder_path}/*.exe") if is_safe_exe(f)]
-            if not exes:
-                # One level deeper
-                try:
-                    for sub in os.listdir(folder_path):
-                        sub_path = os.path.join(folder_path, sub)
-                        if os.path.isdir(sub_path):
-                            exes += [f for f in glob.glob(f"{sub_path}/*.exe")
-                                     if is_safe_exe(f)]
-                except PermissionError:
-                    pass
+            if game_folder.lower() in games:
+                continue  # already found via ACF
+
+            exes = []
+            # Search up to 3 levels deep
+            for root, dirs, files in os.walk(folder_path):
+                depth = root.replace(folder_path, "").count(os.sep)
+                if depth > 3:
+                    dirs.clear()
+                    continue
+                for file in files:
+                    if file.endswith(".exe") and is_safe_exe(file):
+                        exes.append(os.path.join(root, file))
+
             if exes:
                 main_exe = max(exes, key=os.path.getsize)
                 games[game_folder.lower()] = main_exe
-                print(f"    + {game_folder}")
+                print(f"    + {game_folder} (folder scan)")
+
     return games
 
 # ── Startup scan ──────────────────────────────────────────────────────
