@@ -278,7 +278,7 @@ def launch_steam_game(game_name: str) -> str:
         if score > best_score:
             best_score = score
             best_match = (folder_name, exe_path)
-    if best_match and best_score >= 60:
+    if best_match and best_score >= 70:
         launch_detached(best_match[1])
         return f"Launching {best_match[0].title()}."
     return f"Couldn't find '{game_name}' in your Steam library."

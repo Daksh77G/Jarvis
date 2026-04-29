@@ -1,5 +1,6 @@
 import os
 import re
+import skills.app_launcher as al
 from groq import Groq
 from skills.app_launcher import open_app, open_website, close_app, launch_steam_game, STEAM_GAMES
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
@@ -9,6 +10,10 @@ from skills.system_controls import (volume_up, volume_down, mute, set_volume,
 ASSISTANT_NAME = "Jarvis"
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 conversation_history = []
+
+# Apps that should NEVER be opened as websites
+APP_PRIORITY = ["spotify", "discord", "steam", "roblox", "minecraft",
+                "riot client", "valorant", "vscode", "chrome", "firefox"]
 
 def speak(text):
     print(f"\n{ASSISTANT_NAME}: {text}\n")
@@ -65,10 +70,16 @@ def handle_command(text: str):
 
     # --- List Steam Games ---
     if any(x in t for x in ["list games", "list steam", "what games", "which games", "my games"]):
-        if STEAM_GAMES:
-            names = ", ".join(sorted(STEAM_GAMES.keys()))
+        games = al.STEAM_GAMES
+        if games:
+            names = ", ".join(sorted(games.keys()))
             return f"I found these Steam games: {names}."
         return "I couldn't find any Steam games."
+
+    # --- Refresh Game Cache ---
+    if any(x in t for x in ["refresh games", "rescan games", "update games", "scan games"]):
+        al.STEAM_GAMES = al.refresh_games()
+        return f"Done! Found {len(al.STEAM_GAMES)} games."
 
     # --- Close App ---
     if re.search(r'\b(close|quit|kill)\b', t) and not t.startswith("exit"):
@@ -76,28 +87,27 @@ def handle_command(text: str):
         if app:
             return close_app(app)
 
-    # --- Websites ---
+    # --- Websites (skip if it's a known installed app) ---
     website_triggers = [".com", ".org", ".net", ".io", ".tv",
                         "youtube", "google", "reddit", "github",
-                        "netflix", "spotify", "twitter", "instagram", "twitch", "chatgpt"]
+                        "netflix", "twitter", "instagram", "twitch", "chatgpt"]
     if any(x in t for x in website_triggers) and any(x in t for x in ["open", "go to", "visit", "browse"]):
-        for word in t.split():
-            clean = word.strip(".,!?")
-            if "." in clean or clean in website_triggers:
-                return open_website(clean)
+        if not any(app in t for app in APP_PRIORITY):
+            for word in t.split():
+                clean = word.strip(".,!?")
+                if "." in clean or clean in website_triggers:
+                    return open_website(clean)
 
-    # --- Steam Games (play/run/launch) ---
+    # --- Steam Games (play/run/launch/start) ---
     if re.search(r'\b(play|launch|run|start)\b', t):
         app = re.sub(r'\b(play|launch|run|start)\b', '', t).strip()
         if app:
-            # Try Steam first
             result = launch_steam_game(app)
             if "Couldn't find" not in result:
                 return result
-            # Fall back to general app open
             return open_app(app)
 
-    # --- Open Apps (includes Steam games via open_app fallback) ---
+    # --- Open Apps ---
     if re.search(r'^open .+', t):
         app = re.sub(r'^open\s+', '', t).strip()
         if app:
@@ -106,7 +116,7 @@ def handle_command(text: str):
     return None  # Hand off to LLM
 
 def ask_llm(user_input):
-    game_list = ", ".join(sorted(STEAM_GAMES.keys())) if STEAM_GAMES else "none detected"
+    game_list = ", ".join(sorted(al.STEAM_GAMES.keys())) if al.STEAM_GAMES else "none detected"
     conversation_history.append({"role": "user", "content": user_input})
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
