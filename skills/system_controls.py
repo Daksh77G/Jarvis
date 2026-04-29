@@ -1,5 +1,6 @@
 import subprocess
 import os
+import datetime
 
 def volume_up() -> str:
     subprocess.run(["powershell", "-command",
@@ -17,42 +18,14 @@ def mute() -> str:
     return "Toggled mute."
 
 def set_volume(level: int) -> str:
-    """Set exact volume level 0-100"""
     level = max(0, min(100, level))
-    script = f"""
-    $volume = {level / 100}
-    $obj = New-Object -ComObject WScript.Shell
-    Add-Type -TypeDefinition @'
-    using System.Runtime.InteropServices;
-    [Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IAudioEndpointVolume {{
-        int f(); int g(); int h(); int i();
-        int SetMasterVolumeLevelScalar(float fLevel, System.Guid pguidEventContext);
-        int j(); int k(); int l(); int m();
-        int GetMasterVolumeLevelScalar(out float pfLevel);
-    }}
-    [Guid("BCDE0395-E52F-467C-8E3D-C4579291692E"), ClassInterface(ClassInterfaceType.None)]
-    class MMDeviceEnumerator {{}}
-    [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    interface IMMDeviceEnumerator {{
-        int f();
-        int GetDefaultAudioEndpoint(int dataFlow, int role, out System.IntPtr ppDevice);
-    }}
-'@
-    $type = [System.Type]::GetTypeFromCLSID([Guid]"BCDE0395-E52F-467C-8E3D-C4579291692E")
-    $obj2 = [System.Activator]::CreateInstance($type)
-    $enumerator = [IMMDeviceEnumerator]$obj2
-    $devicePtr = [System.IntPtr]::Zero
-    $enumerator.GetDefaultAudioEndpoint(0, 1, [ref]$devicePtr) | Out-Null
-    """
-    # Simpler reliable method via nircmd or powershell audio API
     try:
         subprocess.run(
             ["powershell", "-command",
              f"$wsh = New-Object -ComObject WScript.Shell; "
-             f"1..50 | ForEach-Object {{ $wsh.SendKeys([char]174) }}; "  # mute all the way down
+             f"1..50 | ForEach-Object {{ $wsh.SendKeys([char]174) }}; "
              f"$steps = [math]::Round({level} / 2); "
-             f"1..$steps | ForEach-Object {{ $wsh.SendKeys([char]175) }}"],  # bring up to level
+             f"1..$steps | ForEach-Object {{ $wsh.SendKeys([char]175) }}"],
             capture_output=True
         )
         return f"Volume set to approximately {level}%."
@@ -100,9 +73,10 @@ def get_battery() -> str:
     return f"Battery is at {level}%." if level else "No battery found (desktop PC)."
 
 def take_screenshot() -> str:
-    import datetime
-    filename = os.path.join(os.path.expanduser("~"), "Desktop",
-               f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png")
+    filename = os.path.join(
+        os.path.expanduser("~"), "Desktop",
+        f"screenshot_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+    )
     subprocess.run(["powershell", "-command",
         f"Add-Type -AssemblyName System.Windows.Forms,System.Drawing; "
         f"$s=[System.Windows.Forms.Screen]::PrimaryScreen.Bounds; "
@@ -110,4 +84,4 @@ def take_screenshot() -> str:
         f"$g=[System.Drawing.Graphics]::FromImage($b); "
         f"$g.CopyFromScreen($s.Location,[System.Drawing.Point]::Empty,$s.Size); "
         f"$b.Save('{filename}')"], capture_output=True)
-    return f"Screenshot saved to Desktop."
+    return "Screenshot saved to Desktop."
