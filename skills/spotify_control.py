@@ -34,17 +34,35 @@ def get_spotify():
     except Exception:
         return None
 
-def _open_spotify_search(query: str):
-    """Open Spotify search, escape to clear focus, tab once, enter twice to play"""
+def _spotify_play_song(query: str):
+    """For specific songs — tab, enter, enter"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
         time.sleep(3.5)
-        pyautogui.press("escape")     # clear any leftover focus from previous search
+        pyautogui.press("escape")     # clear leftover focus
         time.sleep(0.2)
         pyautogui.press("tab")        # focus first result
         time.sleep(0.2)
         pyautogui.press("enter")      # open it
+        time.sleep(0.2)
+        pyautogui.press("enter")      # play it
+
+def _spotify_play_playlist(query: str):
+    """For playlists/genres — tab, enter, tab, tab, enter"""
+    q = query.replace(" ", "%20")
+    os.startfile(f"spotify:search:{q}")
+    if PYAUTOGUI_AVAILABLE:
+        time.sleep(3.5)
+        pyautogui.press("escape")     # clear leftover focus
+        time.sleep(0.2)
+        pyautogui.press("tab")        # focus first result
+        time.sleep(0.2)
+        pyautogui.press("enter")      # open playlist page
+        time.sleep(1.2)               # wait for playlist page to load
+        pyautogui.press("tab")        # tab into playlist content
+        time.sleep(0.2)
+        pyautogui.press("tab")        # tab to play button
         time.sleep(0.2)
         pyautogui.press("enter")      # play it
 
@@ -60,7 +78,6 @@ def play_song(query: str) -> str:
                 return f"Couldn't find '{query}' on Spotify."
             track = tracks[0]
             track_name = track["name"]
-            artists = ", ".join(a["name"] for a in track["artists"])
             devices = sp.devices()
             device_list = devices.get("devices", [])
             if not device_list:
@@ -71,12 +88,12 @@ def play_song(query: str) -> str:
                 device_list[0]["id"]
             )
             sp.start_playback(device_id=device_id, uris=[track["uri"]])
-            return f"Playing '{track_name}' by {artists}."
+            return f"Playing '{track_name}' on Spotify."
         except Exception:
             pass
 
     # Free account path
-    _open_spotify_search(query)
+    _spotify_play_song(query)
     return f"Playing '{query}' on Spotify."
 
 def play_playlist(query: str) -> str:
@@ -87,11 +104,15 @@ def play_playlist(query: str) -> str:
         os.startfile("spotify:collection")
         if PYAUTOGUI_AVAILABLE:
             time.sleep(3.5)
-            pyautogui.press("escape")     # clear any leftover focus
+            pyautogui.press("escape")
             time.sleep(0.2)
             pyautogui.press("tab")
             time.sleep(0.2)
             pyautogui.press("enter")
+            time.sleep(1.2)
+            pyautogui.press("tab")
+            time.sleep(0.2)
+            pyautogui.press("tab")
             time.sleep(0.2)
             pyautogui.press("enter")
         return "Playing your Liked Songs."
@@ -119,9 +140,9 @@ def play_playlist(query: str) -> str:
         except Exception:
             pass
 
-    # Free account path
-    _open_spotify_search(f"playlist {query}")
-    return f"Playing playlist '{query}' on Spotify."
+    # Free account path — playlist navigation
+    _spotify_play_playlist(f"playlist {query}")
+    return f"Playing '{query}' on Spotify."
 
 def get_current_song() -> str:
     sp = get_spotify()
