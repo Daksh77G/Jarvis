@@ -39,13 +39,13 @@ def _spotify_play_song(query: str):
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
-        time.sleep(3.5)
+        time.sleep(3.5)        # wait for Spotify to load
         pyautogui.press("escape")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("tab")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("enter")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("enter")
 
 def _spotify_play_playlist(query: str):
@@ -53,19 +53,19 @@ def _spotify_play_playlist(query: str):
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
-        time.sleep(3.5)
+        time.sleep(3.5)        # wait for Spotify to load
         pyautogui.press("escape")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("tab")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("enter")
-        time.sleep(1.2)
+        time.sleep(1.0)        # wait for playlist page to load
         pyautogui.press("tab")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("tab")
-        time.sleep(0.2)
+        time.sleep(0.05)
         pyautogui.press("enter")
-
+        
 def play_song(query: str) -> str:
     sp = get_spotify()
 
