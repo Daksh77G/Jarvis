@@ -2,116 +2,192 @@ import subprocess
 import webbrowser
 import os
 import glob
+import re
+import winreg
 from rapidfuzz import fuzz
 
-APP_MAP = {
-    "chrome": r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-    "firefox": r"C:\Program Files\Mozilla Firefox\firefox.exe",
-    "notepad": "notepad.exe",
-    "calculator": "calc.exe",
-    "explorer": "explorer.exe",
-    "vscode": r"C:\Users\%USERNAME%\AppData\Local\Programs\Microsoft VS Code\Code.exe",
-    "discord": r"C:\Users\%USERNAME%\AppData\Local\Discord\Update.exe",
-    "spotify": r"C:\Users\%USERNAME%\AppData\Roaming\Spotify\Spotify.exe",
-    "steam": r"C:\Program Files (x86)\Steam\steam.exe",
-    "riot client": r"C:\Riot Games\Riot Client\RiotClientServices.exe",
-    "valorant": r"C:\Riot Games\VALORANT\live\VALORANT.exe",
-    "word": r"C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE",
-    "excel": r"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE",
-    "task manager": "taskmgr.exe",
-    "paint": "mspaint.exe",
-}
-
-# These will NEVER be launched — safety blocklist
-BLOCKED_EXECUTABLES = [
+# ── Blocked executables (never launch these) ──────────────────────────
+BLOCKED = [
     "sh.exe", "bash.exe", "cmd.exe", "powershell.exe",
-    "unins000.exe", "uninstall.exe", "setup.exe", "install.exe",
-    "vcredist", "directx", "redist", "dotnet", "vc_redist",
-    "crashhandler", "crashreport", "bugreport", "updater.exe",
-    "update.exe", "launcher_installer"
+    "unins", "uninstall", "setup", "install", "vcredist",
+    "directx", "redist", "dotnet", "crashhandler", "crashreport",
+    "bugreport", "updater", "update", "git", "mingw", "msys", "cygwin"
 ]
 
-STEAM_DIRS = [
-    r"C:\Program Files (x86)\Steam\steamapps\common",
-    r"D:\Steam\steamapps\common",
-    r"D:\SteamLibrary\steamapps\common",
-    r"C:\Steam\steamapps\common",
-    r"E:\Steam\steamapps\common",
-]
+# ── Known apps (fallback for non-Steam apps) ──────────────────────────
+APP_MAP = {
+    "chrome":       r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    "firefox":      r"C:\Program Files\Mozilla Firefox\firefox.exe",
+    "notepad":      "notepad.exe",
+    "calculator":   "calc.exe",
+    "explorer":     "explorer.exe",
+    "task manager": "taskmgr.exe",
+    "paint":        "mspaint.exe",
+    "vscode":       r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe",
+    "discord":      r"%LOCALAPPDATA%\Discord\Update.exe",
+    "spotify":      r"%APPDATA%\Spotify\Spotify.exe",
+    "riot client":  r"C:\Riot Games\Riot Client\RiotClientServices.exe",
+    "valorant":     r"C:\Riot Games\Riot Client\RiotClientServices.exe --launch-product=valorant --launch-patchline=live",
+}
 
 APP_SEARCH_DIRS = [
     r"C:\Program Files",
     r"C:\Program Files (x86)",
     r"C:\Riot Games",
-    os.path.expandvars(r"C:\Users\%USERNAME%\AppData\Roaming"),
-    os.path.expandvars(r"C:\Users\%USERNAME%\AppData\Local"),
+    os.path.expandvars(r"%APPDATA%"),
+    os.path.expandvars(r"%LOCALAPPDATA%"),
 ]
 
 def is_safe_exe(path: str) -> bool:
     name = os.path.basename(path).lower()
-    return not any(blocked in name for blocked in BLOCKED_EXECUTABLES)
+    return not any(b in name for b in BLOCKED)
 
-def launch_detached(path: str):
-    """Launch a process fully detached from CMD so it doesn't freeze terminal"""
+def launch_detached(path: str, args: str = ""):
+    full = f'"{path}" {args}' if args else f'"{path}"'
     subprocess.Popen(
-        path,
+        full,
         creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        shell=True,
         close_fds=True
     )
 
-def open_app(app_name: str) -> str:
-    app_name = app_name.lower().strip()
+# ── Steam auto-detection ──────────────────────────────────────────────
 
-    # Fuzzy match against known apps
+def get_steam_library_paths() -> list:
+    """Read Steam's libraryfolders.vdf to find ALL game library locations"""
+    paths = []
+
+    # Find Steam install path from registry
+    try:
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                             r"SOFTWARE\WOW6432Node\Valve\Steam")
+        steam_path = winreg.QueryValueEx(key, "InstallPath")[0]
+        winreg.CloseKey(key)
+    except Exception:
+        steam_path = r"C:\Program Files (x86)\Steam"
+
+    vdf_path = os.path.join(steam_path, "steamapps", "libraryfolders.vdf")
+    if not os.path.exists(vdf_path):
+        return [os.path.join(steam_path, "steamapps", "common")]
+
+    with open(vdf_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Extract all library paths from the VDF file
+    for match in re.finditer(r'"path"\s+"([^"]+)"', content):
+        lib_path = match.group(1).replace("\\\\", "\\")
+        common = os.path.join(lib_path, "steamapps", "common")
+        if os.path.exists(common):
+            paths.append(common)
+
+    return paths if paths else [os.path.join(steam_path, "steamapps", "common")]
+
+def get_all_steam_games() -> dict:
+    """Return a dict of {game_name_lower: exe_path} for all installed Steam games"""
+    games = {}
+    for library in get_steam_library_paths():
+        if not os.path.exists(library):
+            continue
+        for game_folder in os.listdir(library):
+            folder_path = os.path.join(library, game_folder)
+            if not os.path.isdir(folder_path):
+                continue
+            # Find best exe in the game's root folder
+            exes = [f for f in glob.glob(f"{folder_path}/*.exe") if is_safe_exe(f)]
+            if not exes:
+                # Go one level deeper
+                exes = [f for f in glob.glob(f"{folder_path}/**/*.exe", recursive=False)
+                        if is_safe_exe(f)]
+            if exes:
+                main_exe = max(exes, key=os.path.getsize)
+                games[game_folder.lower()] = main_exe
+    return games
+
+# Cache games at startup so search is instant
+print("Scanning Steam library...")
+STEAM_GAMES = get_all_steam_games()
+print(f"Found {len(STEAM_GAMES)} Steam games.")
+
+# ── Core functions ────────────────────────────────────────────────────
+
+def launch_steam_game(game_name: str) -> str:
+    game_clean = game_name.lower().strip()
     best_match = None
     best_score = 0
-    for key in APP_MAP:
-        score = fuzz.partial_ratio(app_name, key)
+
+    for folder_name, exe_path in STEAM_GAMES.items():
+        score = fuzz.partial_ratio(game_clean, folder_name)
         if score > best_score:
             best_score = score
-            best_match = key
+            best_match = (folder_name, exe_path)
+
+    if best_match and best_score >= 60:
+        launch_detached(best_match[1])
+        return f"Launching {best_match[0].title()}."
+
+    return f"Couldn't find '{game_name}' in your Steam library."
+
+def open_app(app_name: str) -> str:
+    app_name_clean = app_name.lower().strip()
+
+    # 1. Check known APP_MAP first
+    best_key, best_score = None, 0
+    for key in APP_MAP:
+        score = fuzz.partial_ratio(app_name_clean, key)
+        if score > best_score:
+            best_score = score
+            best_key = key
 
     if best_score >= 75:
-        path = os.path.expandvars(APP_MAP[best_match])
-        if os.path.exists(path) and is_safe_exe(path):
-            launch_detached(path)
-            return f"Opening {best_match}."
+        raw = os.path.expandvars(APP_MAP[best_key])
+        # Handle entries with args (like valorant)
+        parts = raw.split(".exe")
+        exe = parts[0] + ".exe"
+        args = parts[1].strip() if len(parts) > 1 else ""
+        if os.path.exists(exe) and is_safe_exe(exe):
+            launch_detached(exe, args)
+            return f"Opening {best_key}."
 
-    return search_and_open(app_name)
+    # 2. Check Steam games
+    steam_result = launch_steam_game(app_name_clean)
+    if "Couldn't find" not in steam_result:
+        return steam_result
+
+    # 3. Search PC folders (shallow)
+    return search_and_open(app_name_clean)
 
 def search_and_open(app_name: str) -> str:
     app_clean = app_name.replace(" ", "").lower()
-    best_match = None
-    best_score = 0
+    best_match, best_score = None, 0
 
     for directory in APP_SEARCH_DIRS:
         if not os.path.exists(directory):
             continue
         try:
-            # Only search 2 levels deep for speed
             for root, dirs, files in os.walk(directory):
                 depth = root.replace(directory, "").count(os.sep)
                 if depth > 2:
                     dirs.clear()
                     continue
                 for file in files:
-                    if not file.endswith(".exe"):
+                    if not file.endswith(".exe") or not is_safe_exe(file):
                         continue
-                    if not is_safe_exe(file):
+                    # Skip Git/MinGW/system paths
+                    if any(x in root.lower() for x in ["git", "mingw", "msys", "cygwin", "windows"]):
                         continue
-                    exe_name = file.replace(".exe","").replace("-"," ").replace("_"," ").lower()
-                    score = fuzz.partial_ratio(app_clean, exe_name.replace(" ",""))
+                    exe_name = file.replace(".exe", "").replace("-", "").replace("_", "").lower()
+                    score = fuzz.partial_ratio(app_clean, exe_name)
                     if score > best_score:
                         best_score = score
                         best_match = os.path.join(root, file)
         except PermissionError:
             continue
 
-    if best_match and best_score >= 75 and is_safe_exe(best_match):
+    if best_match and best_score >= 78 and is_safe_exe(best_match):
         launch_detached(best_match)
-        return f"Opening {os.path.basename(best_match).replace('.exe','')}."
+        return f"Opening {os.path.basename(best_match).replace('.exe', '')}."
 
-    return f"Couldn't find '{app_name}'. You can add it manually in the app list."
+    return f"Couldn't find '{app_name}'. You can add it to APP_MAP in app_launcher.py."
 
 def close_app(app_name: str) -> str:
     app_name = app_name.lower().strip()
@@ -124,7 +200,7 @@ def close_app(app_name: str) -> str:
         parts = line.split()
         if not parts:
             continue
-        proc = parts[0].replace(".exe","").lower()
+        proc = parts[0].replace(".exe", "").lower()
         if fuzz.partial_ratio(app_name, proc) >= 75:
             subprocess.run(["taskkill", "/F", "/IM", parts[0]], capture_output=True)
             return f"Closed {proc}."
@@ -145,45 +221,3 @@ def open_website(url: str) -> str:
         url = "https://" + url
     webbrowser.open(url)
     return f"Opening {url}."
-
-def launch_steam_game(game_name: str) -> str:
-    game_clean = game_name.lower().replace(" ", "")
-    best_match_folder = None
-    best_score = 0
-
-    for steam_dir in STEAM_DIRS:
-        if not os.path.exists(steam_dir):
-            continue
-        try:
-            for game_folder in os.listdir(steam_dir):
-                folder_clean = game_folder.lower().replace(" ", "")
-                score = fuzz.partial_ratio(game_clean, folder_clean)
-                if score > best_score:
-                    best_score = score
-                    best_match_folder = os.path.join(steam_dir, game_folder)
-        except Exception:
-            continue
-
-    if best_match_folder and best_score >= 65:
-        # Find all .exe files directly in the game folder (not subdirs first)
-        game_folder_exes = glob.glob(f"{best_match_folder}/*.exe")
-        game_folder_exes = [e for e in game_folder_exes if is_safe_exe(e)]
-
-        if not game_folder_exes:
-            # Go one level deeper only
-            game_folder_exes = glob.glob(f"{best_match_folder}/**/*.exe", recursive=False)
-            game_folder_exes = [e for e in game_folder_exes if is_safe_exe(e)]
-
-        if game_folder_exes:
-            # Pick largest .exe = most likely the game
-            main_exe = max(game_folder_exes, key=os.path.getsize)
-            launch_detached(main_exe)
-            return f"Launching {os.path.basename(best_match_folder)}."
-
-    # Fallback: open Steam
-    steam = r"C:\Program Files (x86)\Steam\steam.exe"
-    if os.path.exists(steam):
-        launch_detached(steam)
-        return f"Couldn't find {game_name} directly. Opening Steam for you."
-
-    return f"Couldn't find {game_name}."
