@@ -15,6 +15,7 @@ except ImportError:
     VOICE_AVAILABLE = False
 
 ASSISTANT_NAME = "Jarvis"
+WAKE_WORDS = ["hey jarvis", "okay jarvis", "jarvis"]
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 conversation_history = []
 
@@ -30,21 +31,40 @@ def extract_number(text):
     match = re.search(r'\b(\d+)\b', text)
     return int(match.group(1)) if match else None
 
-def listen() -> str:
-    """Listen from mic and return recognized text, or empty string on failure."""
-    if not VOICE_AVAILABLE:
-        return ""
+def listen_for_wake_word() -> bool:
+    """Passively listen until wake word is detected. Returns True when heard."""
     with sr.Microphone() as source:
-        print("Listening...")
-        recognizer.adjust_for_ambient_noise(source, duration=0.3)
+        recognizer.adjust_for_ambient_noise(source, duration=0.2)
+        while True:
+            try:
+                audio = recognizer.listen(source, timeout=5, phrase_time_limit=4)
+                text = recognizer.recognize_google(audio).lower()
+                print(f"[passive] heard: {text}")
+                if any(w in text for w in WAKE_WORDS):
+                    return True
+            except sr.WaitTimeoutError:
+                continue
+            except sr.UnknownValueError:
+                continue
+            except sr.RequestError:
+                speak("Voice service unavailable.")
+                return False
+
+def listen_for_command() -> str:
+    """After wake word — listen for the actual command."""
+    with sr.Microphone() as source:
+        print("Listening for command...")
+        recognizer.adjust_for_ambient_noise(source, duration=0.2)
         try:
             audio = recognizer.listen(source, timeout=6, phrase_time_limit=10)
             text = recognizer.recognize_google(audio)
             print(f"You: {text}")
             return text
         except sr.WaitTimeoutError:
+            speak("I didn't catch that.")
             return ""
         except sr.UnknownValueError:
+            speak("Couldn't understand that.")
             return ""
         except sr.RequestError:
             speak("Voice service unavailable.")
@@ -242,11 +262,16 @@ if __name__ == "__main__":
         print("speech_recognition not installed — falling back to text input.")
         print("Run: pip install SpeechRecognition pyaudio\n")
 
-    speak(f"Hello! I am {ASSISTANT_NAME}. How can I help?")
+    speak(f"{ASSISTANT_NAME} online. Say 'Hey Jarvis' to wake me up.")
 
     while True:
         if VOICE_AVAILABLE:
-            user_input = listen()
+            print("[waiting for wake word...]")
+            woke = listen_for_wake_word()
+            if not woke:
+                continue
+            speak("Yeah?")
+            user_input = listen_for_command()
             if not user_input:
                 continue
         else:
@@ -254,7 +279,7 @@ if __name__ == "__main__":
             if not user_input:
                 continue
 
-        if user_input.lower() in ["exit", "goodbye", "quit"]:
+        if user_input.lower() in ["exit", "goodbye", "quit", "shut down jarvis"]:
             speak("Goodbye!")
             break
 
