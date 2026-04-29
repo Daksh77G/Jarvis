@@ -8,6 +8,12 @@ from skills.system_controls import (volume_up, volume_down, mute, set_volume,
     media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
 
+try:
+    import speech_recognition as sr
+    VOICE_AVAILABLE = True
+except ImportError:
+    VOICE_AVAILABLE = False
+
 ASSISTANT_NAME = "Jarvis"
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 conversation_history = []
@@ -15,12 +21,34 @@ conversation_history = []
 APP_PRIORITY = ["spotify", "discord", "steam", "roblox", "minecraft",
                 "riot client", "valorant", "vscode", "chrome", "firefox"]
 
+recognizer = sr.Recognizer() if VOICE_AVAILABLE else None
+
 def speak(text):
     print(f"\n{ASSISTANT_NAME}: {text}\n")
 
 def extract_number(text):
     match = re.search(r'\b(\d+)\b', text)
     return int(match.group(1)) if match else None
+
+def listen() -> str:
+    """Listen from mic and return recognized text, or empty string on failure."""
+    if not VOICE_AVAILABLE:
+        return ""
+    with sr.Microphone() as source:
+        print("Listening...")
+        recognizer.adjust_for_ambient_noise(source, duration=0.3)
+        try:
+            audio = recognizer.listen(source, timeout=6, phrase_time_limit=10)
+            text = recognizer.recognize_google(audio)
+            print(f"You: {text}")
+            return text
+        except sr.WaitTimeoutError:
+            return ""
+        except sr.UnknownValueError:
+            return ""
+        except sr.RequestError:
+            speak("Voice service unavailable.")
+            return ""
 
 def handle_command(text: str):
     t = text.lower().strip()
@@ -117,13 +145,12 @@ def handle_command(text: str):
         artist = spotify_by.group(2).strip()
         return play_song(f"{song} {artist}")
 
-    # --- Spotify: "play X" with no "by" and no game/video context → playlist/genre ---
+    # --- Spotify: "play X" with no "by" → playlist/genre ---
     spotify_generic = re.search(r'^(?:play|put on|listen to) (.+?)$', t)
     if spotify_generic and not any(x in t for x in ["game", "steam", "launch",
                                                       "video", "youtube",
                                                       "song", "track", "media"]):
         query = spotify_generic.group(1).strip()
-        # Skip if it looks like a Steam game launch
         result = launch_steam_game(query)
         if result and "Couldn't find" not in result:
             return result
@@ -211,14 +238,26 @@ def ask_llm(user_input):
     return reply
 
 if __name__ == "__main__":
+    if not VOICE_AVAILABLE:
+        print("speech_recognition not installed — falling back to text input.")
+        print("Run: pip install SpeechRecognition pyaudio\n")
+
     speak(f"Hello! I am {ASSISTANT_NAME}. How can I help?")
+
     while True:
-        user_input = input("You: ").strip()
-        if not user_input:
-            continue
+        if VOICE_AVAILABLE:
+            user_input = listen()
+            if not user_input:
+                continue
+        else:
+            user_input = input("You: ").strip()
+            if not user_input:
+                continue
+
         if user_input.lower() in ["exit", "goodbye", "quit"]:
             speak("Goodbye!")
             break
+
         result = handle_command(user_input)
         if result:
             speak(result)
