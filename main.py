@@ -2,7 +2,8 @@ import os
 import re
 import skills.app_launcher as al
 from groq import Groq
-from skills.app_launcher import open_app, open_website, close_app, launch_steam_game
+from skills.app_launcher import (open_app, open_website, close_app,
+                                  launch_steam_game, search_youtube, search_spotify)
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
     media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
@@ -11,7 +12,6 @@ ASSISTANT_NAME = "Jarvis"
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 conversation_history = []
 
-# Apps that should NEVER be opened as websites
 APP_PRIORITY = ["spotify", "discord", "steam", "roblox", "minecraft",
                 "riot client", "valorant", "vscode", "chrome", "firefox"]
 
@@ -40,7 +40,7 @@ def handle_command(text: str):
     if "mute" in t:
         return mute()
 
-    # --- Media (must be ABOVE game launcher to avoid "play music" → Steam) ---
+    # --- Media controls (ABOVE game launcher) ---
     if any(x in t for x in ["pause music", "pause song", "pause media",
                               "resume music", "resume song", "resume media",
                               "play music", "start music", "unpause"]):
@@ -76,7 +76,6 @@ def handle_command(text: str):
             names = ", ".join(sorted(games.keys()))
             return f"I found these games: {names}."
         return "I couldn't find any Steam games."
-
     if any(x in t for x in ["refresh games", "rescan games", "update games", "scan games"]):
         al.STEAM_GAMES = al.refresh_games()
         return f"Done! Found {len(al.STEAM_GAMES)} games."
@@ -87,37 +86,59 @@ def handle_command(text: str):
         if app:
             return close_app(app)
 
-    # --- Subreddit shortcut ---
+    # --- Subreddit shortcut: "open r/DayTrading" ---
     subreddit_match = re.search(r'r/(\w+)', t)
     if subreddit_match:
         sub = subreddit_match.group(1)
         return open_website(f"reddit.com/r/{sub}")
 
-    # --- YouTube channel search ---
+    # --- Spotify: play song or playlist ---
+    # "play First Person Shooter on spotify" / "play X by Drake on spotify"
+    spotify_explicit = re.search(
+        r'(?:play|listen to|put on|search) (.+?) (?:on spotify|in spotify|on repeat)', t)
+    if spotify_explicit:
+        query = spotify_explicit.group(1).strip()
+        return search_spotify(query)
+
+    # "play [song] by [artist]" → assume Spotify
+    spotify_by = re.search(r'play (.+?) by (.+)', t)
+    if spotify_by and not any(x in t for x in ["game", "steam", "launch"]):
+        song = spotify_by.group(1).strip()
+        artist = spotify_by.group(2).strip()
+        return search_spotify(f"{song} {artist}")
+
+    # --- YouTube: specific video or search ---
+    # "play MrBeast's latest video" / "find a video about X"
+    yt_play = re.search(
+        r'(?:play|find|show|watch) (.+?)(?:\'s)? (?:latest |most recent |new )?(?:video|videos|youtube)', t)
+    if yt_play:
+        query = yt_play.group(1).strip()
+        return search_youtube(f"{query} latest", first_result=True)
+
+    yt_help = re.search(r'(?:find|show|search) (?:a |me a )?video (?:about|on|for|that|to help) (.+)', t)
+    if yt_help:
+        query = yt_help.group(1).strip()
+        return search_youtube(query)
+
+    # "search X on youtube" / "look up X on youtube"
+    yt_search = re.search(r'(?:search|find|look up) (.+?) on youtube', t)
+    if yt_search:
+        query = yt_search.group(1).strip()
+        return search_youtube(query)
+
+    # --- YouTube channel ---
     yt_channel = re.search(r'open (.+?)(?:\'s)? (?:youtube channel|yt channel|channel on youtube)', t)
     if yt_channel:
         query = yt_channel.group(1).strip().replace(" ", "+")
         return open_website(f"youtube.com/results?search_query={query}+channel")
 
-    # --- YouTube search ---
-    yt_search = re.search(r'(?:search|find|look up) (.+?) on youtube', t)
-    if yt_search:
-        query = yt_search.group(1).strip().replace(" ", "+")
-        return open_website(f"youtube.com/results?search_query={query}")
-
     # --- Google search ---
     google_match = re.search(r'^(?:google|search for|search) (.+)', t)
-    if google_match and "game" not in t and "steam" not in t:
+    if google_match and not any(x in t for x in ["game", "steam", "youtube"]):
         query = google_match.group(1).strip().replace(" ", "+")
         return open_website(f"google.com/search?q={query}")
 
-    # --- Spotify song search ---
-    spotify_song = re.search(r'(?:play|listen to|put on) (.+?) (?:on spotify|in spotify|on repeat)', t)
-    if spotify_song:
-        song = spotify_song.group(1).strip().replace(" ", "%20")
-        return open_website(f"open.spotify.com/search/{song}")
-
-    # --- Websites (skip known installed apps) ---
+    # --- Websites ---
     website_triggers = [".com", ".org", ".net", ".io", ".tv",
                         "youtube", "google", "reddit", "github",
                         "netflix", "twitter", "instagram", "twitch", "chatgpt"]
@@ -130,8 +151,8 @@ def handle_command(text: str):
 
     # --- Steam Games (play/run/launch/start) ---
     if re.search(r'\b(play|launch|run|start)\b', t):
-        # Don't treat music/song commands as game launches
-        if not any(x in t for x in ["music", "song", "track", "media"]):
+        if not any(x in t for x in ["music", "song", "track", "media",
+                                     "spotify", "youtube", "video", "by "]):
             app = re.sub(r'\b(play|launch|run|start)\b', '', t).strip()
             if app:
                 result = launch_steam_game(app)
@@ -145,7 +166,7 @@ def handle_command(text: str):
         if app:
             return open_app(app)
 
-    return None  # Hand off to LLM
+    return None
 
 def ask_llm(user_input):
     game_list = ", ".join(sorted(al.STEAM_GAMES.keys())) if al.STEAM_GAMES else "none detected"
