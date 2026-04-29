@@ -8,29 +8,25 @@ class JarvisUI:
         self.root = tk.Tk()
         self.root.title("Jarvis")
         self.root.geometry("300x300")
-        self.root.overrideredirect(True)          # no title bar
-        self.root.wm_attributes("-topmost", True) # always on top
-        self.root.wm_attributes("-alpha", 0.85)   # translucent window
+        self.root.overrideredirect(True)
+        self.root.wm_attributes("-topmost", True)
+        self.root.wm_attributes("-alpha", 0.85)
         self.root.configure(bg="#000000")
-        self.root.wm_attributes("-transparentcolor", "#000000")  # black = transparent
+        self.root.wm_attributes("-transparentcolor", "#000000")
 
-        # --- Position: bottom right corner ---
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         self.root.geometry(f"300x300+{sw - 320}+{sh - 340}")
 
-        # --- Canvas for drawing ---
         self.canvas = tk.Canvas(self.root, width=300, height=300,
                                 bg="#000000", highlightthickness=0)
         self.canvas.pack()
 
-        # --- State ---
-        self.state = "sleeping"   # sleeping | listening | thinking | speaking
+        self.state = "sleeping"
         self.angle = 0
         self.pulse = 0
         self.pulse_dir = 1
 
-        # --- Status label ---
         self.status_var = tk.StringVar(value="...")
         self.status_label = tk.Label(
             self.root, textvariable=self.status_var,
@@ -38,7 +34,6 @@ class JarvisUI:
         )
         self.status_label.place(x=150, y=265, anchor="center")
 
-        # --- Drag to move ---
         self.canvas.bind("<ButtonPress-1>", self._drag_start)
         self.canvas.bind("<B1-Motion>", self._drag_motion)
 
@@ -73,15 +68,12 @@ class JarvisUI:
         r = 55 + int(self.pulse * 8)
         alpha_hex = hex(int(80 + self.pulse * 60))[2:].zfill(2)
         color = f"#00{alpha_hex}{'aa'}"
-        # outer glow rings
         for i in range(3):
             ri = r + i * 12
             self.canvas.create_oval(cx-ri, cy-ri, cx+ri, cy+ri,
                                     outline="#004455", width=1)
-        # core orb
         self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r,
                                 fill="#001830", outline="#006688", width=2)
-        # dim eye slits
         self.canvas.create_line(cx-18, cy, cx-6, cy, fill="#004466", width=2)
         self.canvas.create_line(cx+6,  cy, cx+18, cy, fill="#004466", width=2)
 
@@ -89,7 +81,6 @@ class JarvisUI:
         cx, cy = 150, 135
         self.angle = (self.angle + 3) % 360
         r = 65
-        # spinning arcs
         for i in range(6):
             a = math.radians(self.angle + i * 60)
             x1 = cx + r * math.cos(a)
@@ -99,10 +90,8 @@ class JarvisUI:
             brightness = int(100 + i * 25)
             col = f"#{0:02x}{brightness:02x}{brightness:02x}"
             self.canvas.create_line(x1, y1, x2, y2, fill=col, width=2)
-        # core
         self.canvas.create_oval(cx-50, cy-50, cx+50, cy+50,
                                 fill="#001525", outline="#00CCDD", width=2)
-        # open eyes
         self.canvas.create_oval(cx-22, cy-6, cx-8, cy+6,
                                 fill="#00FFFF", outline="")
         self.canvas.create_oval(cx+8,  cy-6, cx+22, cy+6,
@@ -112,7 +101,6 @@ class JarvisUI:
         cx, cy = 150, 135
         self.angle = (self.angle + 5) % 360
         r = 60
-        # rotating dashes
         for i in range(12):
             a = math.radians(self.angle + i * 30)
             x1 = cx + r * math.cos(a)
@@ -124,7 +112,6 @@ class JarvisUI:
                                     fill=f"#00{fade:02x}{fade:02x}", width=2)
         self.canvas.create_oval(cx-50, cy-50, cx+50, cy+50,
                                 fill="#001020", outline="#0099AA", width=2)
-        # thinking squint
         self.canvas.create_line(cx-22, cy-3, cx-8, cy+3,
                                 fill="#00FFFF", width=2)
         self.canvas.create_line(cx+8,  cy-3, cx+22, cy+3,
@@ -136,7 +123,6 @@ class JarvisUI:
         if self.pulse > 1 or self.pulse < 0:
             self.pulse_dir *= -1
         r = 60 + int(self.pulse * 10)
-        # pulsing rings
         for i in range(4):
             ri = r + i * 10
             fade = 180 - i * 35
@@ -144,7 +130,6 @@ class JarvisUI:
                                     outline=f"#00{fade:02x}{fade:02x}", width=1)
         self.canvas.create_oval(cx-r, cy-r, cx+r, cy+r,
                                 fill="#001828", outline="#00EEFF", width=2)
-        # open mouth expression
         self.canvas.create_oval(cx-22, cy-7, cx-8, cy+7,
                                 fill="#00FFFF", outline="")
         self.canvas.create_oval(cx+8,  cy-7, cx+22, cy+7,

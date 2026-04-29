@@ -72,7 +72,6 @@ def listen_for_command() -> str:
 def handle_command(text: str):
     t = text.lower().strip()
 
-    # --- Volume ---
     if re.search(r'volume (up|increase|raise|higher)|louder|turn it up', t):
         return volume_up()
     if re.search(r'volume (down|decrease|lower)|quieter|turn it down', t):
@@ -87,7 +86,6 @@ def handle_command(text: str):
     if "mute" in t:
         return mute()
 
-    # --- Media controls ---
     if any(x in t for x in ["pause music", "pause song", "pause media",
                               "resume music", "resume song", "resume media",
                               "play music", "start music", "unpause"]):
@@ -97,20 +95,16 @@ def handle_command(text: str):
     if any(x in t for x in ["previous song", "last song", "go back track"]):
         return media_previous()
 
-    # --- What's playing ---
     if any(x in t for x in ["what song", "what's playing", "whats playing",
                               "current song", "what is this song"]):
         return get_current_song()
 
-    # --- Screenshot ---
     if "screenshot" in t or "screen capture" in t:
         return take_screenshot()
 
-    # --- Battery ---
     if "battery" in t:
         return get_battery()
 
-    # --- System ---
     if re.search(r'shut\s*down|turn off (the )?(pc|computer|laptop)', t):
         n = extract_number(t)
         return shutdown(n if n else 10)
@@ -121,7 +115,6 @@ def handle_command(text: str):
     if "sleep" in t and any(x in t for x in ["pc", "computer", "laptop", "put"]):
         return sleep_pc()
 
-    # --- List / Refresh Steam Games ---
     if any(x in t for x in ["list games", "list steam", "what games", "which games", "my games"]):
         games = al.STEAM_GAMES
         if games:
@@ -132,23 +125,19 @@ def handle_command(text: str):
         al.STEAM_GAMES = al.refresh_games()
         return f"Done! Found {len(al.STEAM_GAMES)} games."
 
-    # --- Close App ---
     if re.search(r'\b(close|quit|kill)\b', t) and not t.startswith("exit"):
         app = re.sub(r'\b(close|quit|kill)\b', '', t).strip()
         if app:
             return close_app(app)
 
-    # --- Subreddit shortcut ---
     subreddit_match = re.search(r'r/(\w+)', t)
     if subreddit_match:
         return open_website(f"reddit.com/r/{subreddit_match.group(1)}")
 
-    # --- Spotify: explicit playlist keyword ---
     playlist_match = re.search(r'(?:play|start|put on) (.+?) playlist', t)
     if playlist_match:
         return play_playlist(playlist_match.group(1).strip())
 
-    # --- Spotify: "play X on/in spotify" ---
     spotify_explicit = re.search(
         r'(?:play|listen to|put on|search) (.+?) (?:on spotify|in spotify)', t)
     if spotify_explicit:
@@ -157,14 +146,12 @@ def handle_command(text: str):
             return play_song(query)
         return play_playlist(query)
 
-    # --- Spotify: "play X by Y" → specific song ---
     spotify_by = re.search(r'play (.+?) by (.+)', t)
     if spotify_by and not any(x in t for x in ["game", "steam", "launch", "video", "youtube"]):
         song = spotify_by.group(1).strip()
         artist = spotify_by.group(2).strip()
         return play_song(f"{song} {artist}")
 
-    # --- Spotify: "play X" with no "by" → playlist/genre ---
     spotify_generic = re.search(r'^(?:play|put on|listen to) (.+?)$', t)
     if spotify_generic and not any(x in t for x in ["game", "steam", "launch",
                                                       "video", "youtube",
@@ -175,37 +162,31 @@ def handle_command(text: str):
             return result
         return play_playlist(query)
 
-    # --- YouTube: latest video ---
     yt_play = re.search(
         r'(?:play|find|show|watch) (.+?)(?:\'s)? (?:latest |most recent |new )?(?:video|videos)', t)
     if yt_play:
         return search_youtube(f"{yt_play.group(1).strip()} latest")
 
-    # --- YouTube: help video ---
     yt_help = re.search(
         r'(?:find|show|search) (?:a |me a )?video (?:about|on|for|that|to help) (.+)', t)
     if yt_help:
         return search_youtube(yt_help.group(1).strip())
 
-    # --- YouTube: search ---
     yt_search = re.search(r'(?:search|find|look up) (.+?) on youtube', t)
     if yt_search:
         return search_youtube(yt_search.group(1).strip())
 
-    # --- YouTube: channel ---
     yt_channel = re.search(
         r'open (.+?)(?:\'s)? (?:youtube channel|yt channel|channel on youtube)', t)
     if yt_channel:
         q = yt_channel.group(1).strip().replace(" ", "+")
         return open_website(f"youtube.com/results?search_query={q}+channel")
 
-    # --- Google search ---
     google_match = re.search(r'^(?:google|search for|search) (.+)', t)
     if google_match and not any(x in t for x in ["game", "steam", "youtube"]):
         q = google_match.group(1).strip().replace(" ", "+")
         return open_website(f"google.com/search?q={q}")
 
-    # --- Websites ---
     website_triggers = [".com", ".org", ".net", ".io", ".tv",
                         "youtube", "google", "reddit", "github",
                         "netflix", "twitter", "instagram", "twitch", "chatgpt"]
@@ -216,7 +197,6 @@ def handle_command(text: str):
                 if "." in clean or clean in website_triggers:
                     return open_website(clean)
 
-    # --- Steam Games ---
     if re.search(r'\b(launch|run|start)\b', t):
         if not any(x in t for x in ["music", "song", "track", "media",
                                      "spotify", "youtube", "video", "playlist"]):
@@ -227,8 +207,7 @@ def handle_command(text: str):
                     return result
                 return open_app(app)
 
-    # --- Open Apps ---
-    if re.search(r'^open .+', t):
+-    if re.search(r'^open .+', t):
         app = re.sub(r'^open\s+', '', t).strip()
         if app:
             return open_app(app)

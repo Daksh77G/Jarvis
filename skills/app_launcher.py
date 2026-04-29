@@ -8,7 +8,6 @@ import json
 import winreg
 from rapidfuzz import fuzz
 
-# ── Blocked executables ───────────────────────────────────────────────
 BLOCKED = [
     "sh.exe", "bash.exe", "cmd.exe", "powershell.exe",
     "unins", "uninstall", "setup", "vcredist", "directx",
@@ -67,7 +66,6 @@ def launch_detached(path: str, args: str = ""):
         close_fds=True
     )
 
-# ── Dynamic app finders ───────────────────────────────────────────────
 
 def find_roblox() -> str:
     """Find the newest valid RobloxPlayerBeta.exe"""
@@ -78,11 +76,10 @@ def find_roblox() -> str:
     for folder in os.listdir(versions_path):
         exe = os.path.join(versions_path, folder, "RobloxPlayerBeta.exe")
         dll = os.path.join(versions_path, folder, "RobloxPlayerBeta.dll")
-        # Only include if the DLL exists (valid install)
         if os.path.exists(exe) and os.path.exists(dll):
             candidates.append((os.path.getmtime(exe), exe))
     if candidates:
-        return max(candidates)[1]  # newest valid version
+        return max(candidates)[1]
     return ""
 
 def find_discord() -> str:
@@ -101,7 +98,6 @@ def find_discord() -> str:
         return sorted(candidates)[-1][1]
     return ""
 
-# ── Known non-Steam apps ──────────────────────────────────────────────
 def get_app_map() -> dict:
     return {
         "chrome":      r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -115,7 +111,6 @@ def get_app_map() -> dict:
         "epic games":  r"C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win32\EpicGamesLauncher.exe",
     }
 
-# ── Drive + Steam detection ───────────────────────────────────────────
 
 def get_all_drives() -> list:
     drives = []
@@ -237,7 +232,6 @@ def get_all_steam_games() -> dict:
             pass
     return games
 
-# ── Cache system ──────────────────────────────────────────────────────
 _CACHE_PATH = os.path.join(os.path.dirname(__file__), "..", "game_cache.json")
 _INDEX_PATH = os.path.join(os.path.dirname(__file__), "..", "game_index.txt")
 
@@ -278,7 +272,6 @@ APP_SEARCH_DIRS = [d for drive in get_all_drives()
     os.path.expandvars(r"%LOCALAPPDATA%"),
 ]
 
-# ── Core functions ────────────────────────────────────────────────────
 
 def launch_steam_game(game_name: str) -> str:
     game_clean = game_name.lower().strip()
@@ -297,7 +290,6 @@ def open_app(app_name: str) -> str:
     app_clean = app_name.lower().strip()
     APP_MAP = get_app_map()
 
-    # 1. Roblox — dynamic finder
     if "roblox" in app_clean:
         exe = find_roblox()
         if exe:
@@ -305,7 +297,6 @@ def open_app(app_name: str) -> str:
             return "Opening Roblox."
         return "Couldn't find a valid Roblox installation."
 
-    # 2. Discord — dynamic finder
     if "discord" in app_clean:
         exe = find_discord()
         if exe:
@@ -313,7 +304,6 @@ def open_app(app_name: str) -> str:
             return "Opening Discord."
         return "Couldn't find Discord installed."
 
-    # 3. Protected apps
     for key, path in PROTECTED_APPS.items():
         if key in app_clean or app_clean in key:
             if path.endswith(":"):
@@ -330,7 +320,6 @@ def open_app(app_name: str) -> str:
             except Exception:
                 pass
 
-    # 4. APP_MAP fuzzy
     best_key, best_score = None, 0
     for key in APP_MAP:
         score = fuzz.partial_ratio(app_clean, key)
@@ -346,12 +335,10 @@ def open_app(app_name: str) -> str:
             launch_detached(exe, args)
             return f"Opening {best_key}."
 
-    # 5. Steam library
     result = launch_steam_game(app_clean)
     if "Couldn't find" not in result:
         return result
 
-    # 6. PC folder search
     return search_and_open(app_clean)
 
 def search_and_open(app_name: str) -> str:
@@ -425,9 +412,7 @@ def search_youtube(query: str, first_result: bool = False) -> str:
     """Search YouTube — opens search results or tries to auto-open first video"""
     q = query.strip().replace(" ", "+")
     if first_result:
-        # Use YouTube's undocumented redirect to first result
         url = f"https://www.youtube.com/results?search_query={q}"
-        # Open search — best we can do without API key
         webbrowser.open(url)
         return f"Searching YouTube for '{query}'."
     url = f"https://www.youtube.com/results?search_query={q}"
@@ -437,12 +422,10 @@ def search_youtube(query: str, first_result: bool = False) -> str:
 def search_spotify(query: str, search_type: str = "track") -> str:
     """Open Spotify search via URI — opens directly in Spotify app"""
     q = query.strip().replace(" ", "%20")
-    # spotify: URI opens in the desktop app automatically
     uri = f"spotify:search:{q}"
     try:
         os.startfile(uri)
         return f"Searching Spotify for '{query}'."
     except Exception:
-        # Fallback to web
         webbrowser.open(f"https://open.spotify.com/search/{q}")
         return f"Searching Spotify for '{query}'."
