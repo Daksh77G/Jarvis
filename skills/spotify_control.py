@@ -35,16 +35,14 @@ def get_spotify():
         return None
 
 def _open_spotify_search(query: str):
-    """Open Spotify search, tab 3 times to reach play button, press enter"""
+    """Open Spotify search, tab once to first result, enter twice to play"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
         time.sleep(3.5)
         pyautogui.press("tab")
         time.sleep(0.2)
-        pyautogui.press("tab")
-        time.sleep(0.2)
-        pyautogui.press("tab")
+        pyautogui.press("enter")
         time.sleep(0.2)
         pyautogui.press("enter")
 
@@ -60,7 +58,8 @@ def play_song(query: str) -> str:
                 return f"Couldn't find '{query}' on Spotify."
             track = tracks[0]
             track_name = track["name"]
-            artist = track["artists"][0]["name"]
+            # Join ALL artists, not just the first one
+            artists = ", ".join(a["name"] for a in track["artists"])
             devices = sp.devices()
             device_list = devices.get("devices", [])
             if not device_list:
@@ -71,7 +70,7 @@ def play_song(query: str) -> str:
                 device_list[0]["id"]
             )
             sp.start_playback(device_id=device_id, uris=[track["uri"]])
-            return f"Playing '{track_name}' by {artist}."
+            return f"Playing '{track_name}' by {artists}."
         except Exception:
             pass
 
@@ -119,7 +118,8 @@ def get_current_song() -> str:
             return "Nothing is playing right now."
         track = current["item"]
         name = track["name"]
-        artist = track["artists"][0]["name"]
-        return f"Currently playing '{name}' by {artist}."
+        # Join ALL artists here too
+        artists = ", ".join(a["name"] for a in track["artists"])
+        return f"Currently playing '{name}' by {artists}."
     except Exception:
         return "Couldn't get current song."
