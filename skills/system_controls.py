@@ -1,6 +1,7 @@
 import subprocess
 import os
 import datetime
+import pyautogui
 
 
 def volume_up() -> str:
@@ -38,29 +39,17 @@ def set_volume(level: int) -> str:
 
 
 def media_play_pause() -> str:
-    subprocess.run(["powershell", "-command",
-        "$wsh = New-Object -ComObject WScript.Shell; "
-        "$wsh.AppActivate('Spotify'); "
-        "Start-Sleep -Milliseconds 200; "
-        "$wsh.SendKeys([char]179)"])
+    pyautogui.press("playpause")
     return "Toggled play/pause."
 
 
 def media_next() -> str:
-    subprocess.run(["powershell", "-command",
-        "$wsh = New-Object -ComObject WScript.Shell; "
-        "$wsh.AppActivate('Spotify'); "
-        "Start-Sleep -Milliseconds 200; "
-        "$wsh.SendKeys([char]176)"])
+    pyautogui.press("nexttrack")
     return "Skipped to next track."
 
 
 def media_previous() -> str:
-    subprocess.run(["powershell", "-command",
-        "$wsh = New-Object -ComObject WScript.Shell; "
-        "$wsh.AppActivate('Spotify'); "
-        "Start-Sleep -Milliseconds 200; "
-        "$wsh.SendKeys([char]177)"])
+    pyautogui.press("prevtrack")
     return "Went to previous track."
 
 
