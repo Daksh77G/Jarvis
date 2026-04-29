@@ -16,7 +16,8 @@ BLOCKED = [
     "bugreport", "git", "mingw", "msys", "cygwin",
     "linkshandler", "vconsole", "ndp", "dxsetup", "vc_redist",
     "commonredist", "prerequisite", "physx", "unarc",
-    "helper", "launcher_installer", "easyanticheat_setup"
+    "helper", "launcher_installer", "easyanticheat_setup",
+    "studiolauncher", "studiobeta", "robloxstudio", "studioinstaller"
 ]
 
 # ── Folders that are NOT real games ──────────────────────────────────
@@ -28,14 +29,16 @@ BLOCKED_GAME_FOLDERS = [
     "proton",
 ]
 
-# ── Protected apps — exact match, never fuzzy ─────────────────────────
+# ── Protected apps — substring match, never fuzzy ────────────────────
 PROTECTED_APPS = {
-    "steam":        r"C:\Program Files (x86)\Steam\steam.exe",
-    "notepad":      "notepad.exe",
-    "calculator":   "calc.exe",
-    "explorer":     "explorer.exe",
-    "task manager": "taskmgr.exe",
-    "paint":        "mspaint.exe",
+    "steam":            r"C:\Program Files (x86)\Steam\steam.exe",
+    "microsoft store":  "ms-windows-store:",
+    "store":            "ms-windows-store:",
+    "notepad":          "notepad.exe",
+    "calculator":       "calc.exe",
+    "explorer":         "explorer.exe",
+    "task manager":     "taskmgr.exe",
+    "paint":            "mspaint.exe",
 }
 
 # ── Known non-Steam apps ──────────────────────────────────────────────
@@ -47,24 +50,21 @@ APP_MAP = {
     "spotify":     r"%APPDATA%\Spotify\Spotify.exe",
     "riot client": r"C:\Riot Games\Riot Client\RiotClientServices.exe",
     "valorant":    r"C:\Riot Games\Riot Client\RiotClientServices.exe --launch-product=valorant --launch-patchline=live",
-    "roblox":      r"%LOCALAPPDATA%\Roblox\Versions\RobloxPlayerLauncher.exe",
     "minecraft":   r"%APPDATA%\.minecraft\launcher\MinecraftLauncher.exe",
     "epic games":  r"C:\Program Files (x86)\Epic Games\Launcher\Portal\Binaries\Win32\EpicGamesLauncher.exe",
-    "fortnite":    r"C:\Program Files\Epic Games\Fortnite\FortniteGame\Binaries\Win64\FortniteClient-Win64-Shipping.exe",
 }
 
-# ── Games where we know the exact exe name ────────────────────────────
-# Overrides "largest exe" logic for known problem games
+# ── Known correct exe names for tricky games ─────────────────────────
 KNOWN_EXE_NAMES = {
-    "counter-strike 2": "cs2.exe",
-    "counter-strike global offensive": "cs2.exe",
-    "aim lab": "AimLab_tb.exe",
-    "aimlabs": "AimLab_tb.exe",
-    "the finals": "Discovery.exe",
-    "geometry dash": "GeometryDash.exe",
-    "ghost of tsushima": "GhostOfTsushima.exe",
-    "forza horizon 5": "ForzaHorizon5.exe",
-    "elden ring": "eldenring.exe",
+    "counter-strike 2":                  "cs2.exe",
+    "counter-strike global offensive":   "cs2.exe",
+    "aim lab":                           "AimLab_tb.exe",
+    "aimlabs":                           "AimLab_tb.exe",
+    "the finals":                        "Discovery.exe",
+    "geometry dash":                     "GeometryDash.exe",
+    "ghost of tsushima":                 "GhostOfTsushima.exe",
+    "forza horizon 5":                   "ForzaHorizon5.exe",
+    "elden ring":                        "eldenring.exe",
 }
 
 def is_safe_exe(path: str) -> bool:
@@ -72,8 +72,7 @@ def is_safe_exe(path: str) -> bool:
     return not any(b in name for b in BLOCKED)
 
 def is_real_game_folder(name: str) -> bool:
-    n = name.lower()
-    return not any(b in n for b in BLOCKED_GAME_FOLDERS)
+    return not any(b in name.lower() for b in BLOCKED_GAME_FOLDERS)
 
 def launch_detached(path: str, args: str = ""):
     full = f'"{path}" {args}' if args else f'"{path}"'
@@ -84,8 +83,17 @@ def launch_detached(path: str, args: str = ""):
         close_fds=True
     )
 
-# ── Drive + Steam detection ───────────────────────────────────────────
+# ── Roblox dynamic finder ─────────────────────────────────────────────
+def find_roblox() -> str:
+    versions_path = os.path.expandvars(r"%LOCALAPPDATA%\Roblox\Versions")
+    if os.path.exists(versions_path):
+        for folder in os.listdir(versions_path):
+            exe = os.path.join(versions_path, folder, "RobloxPlayerBeta.exe")
+            if os.path.exists(exe):
+                return exe
+    return ""
 
+# ── Drive + Steam detection ───────────────────────────────────────────
 def get_all_drives() -> list:
     drives = []
     for letter in string.ascii_uppercase:
@@ -112,7 +120,6 @@ def get_steam_library_paths() -> list:
                     paths.append(common)
     except Exception:
         pass
-
     for drive in get_all_drives():
         for name in ["Steam\\steamapps\\common",
                      "SteamLibrary\\steamapps\\common",
@@ -124,10 +131,8 @@ def get_steam_library_paths() -> list:
     return paths
 
 def find_best_exe(folder_path: str, game_name: str) -> str:
-    """Find the best game exe — uses known names first, then largest safe exe"""
     game_lower = game_name.lower()
-
-    # Check known exe names first
+    # Known exe names take priority
     if game_lower in KNOWN_EXE_NAMES:
         known = KNOWN_EXE_NAMES[game_lower].lower()
         for root, dirs, files in os.walk(folder_path):
@@ -139,17 +144,16 @@ def find_best_exe(folder_path: str, game_name: str) -> str:
                 if f.lower() == known:
                     return os.path.join(root, f)
 
-    # Collect all safe exes up to 3 levels deep
+    # Collect safe exes up to 3 levels deep
     exes = []
     for root, dirs, files in os.walk(folder_path):
         depth = root.replace(folder_path, "").count(os.sep)
         if depth > 3:
             dirs.clear()
             continue
-        # Skip tool/redist subfolders
-        if any(b in root.lower() for b in ["_commonredist", "redist",
-               "vcredist", "directx", "dotnet", "streamingassets",
-               "deeplinking", "bin\\win64\\tools", "support"]):
+        if any(b in root.lower() for b in ["_commonredist", "redist", "vcredist",
+               "directx", "dotnet", "streamingassets", "deeplinking",
+               "bin\\win64\\tools", "support"]):
             dirs.clear()
             continue
         for f in files:
@@ -159,18 +163,13 @@ def find_best_exe(folder_path: str, game_name: str) -> str:
     if not exes:
         return ""
 
-    # Prefer exe whose name fuzzy matches the game name
-    game_clean = game_name.lower().replace(" ", "")
+    game_clean = game_lower.replace(" ", "")
     best_by_name = max(exes, key=lambda p:
         fuzz.partial_ratio(game_clean, os.path.basename(p).replace(".exe","").lower()))
     name_score = fuzz.partial_ratio(game_clean,
         os.path.basename(best_by_name).replace(".exe","").lower())
 
-    if name_score >= 60:
-        return best_by_name
-
-    # Fall back to largest exe
-    return max(exes, key=os.path.getsize)
+    return best_by_name if name_score >= 60 else max(exes, key=os.path.getsize)
 
 def get_all_steam_games() -> dict:
     games = {}
@@ -180,7 +179,7 @@ def get_all_steam_games() -> dict:
         print(f"  Scanning: {library}")
         steamapps_dir = os.path.dirname(library)
 
-        # Method 1: ACF manifests (most accurate names)
+        # Method 1: ACF manifests
         acf_games = {}
         try:
             for acf_file in glob.glob(os.path.join(steamapps_dir, "*.acf")):
@@ -208,7 +207,7 @@ def get_all_steam_games() -> dict:
                 games[game_name.lower()] = exe
                 print(f"    + {game_name}")
 
-        # Method 2: Folder scan fallback for anything ACF missed
+        # Method 2: Folder scan fallback
         try:
             for game_folder in os.listdir(library):
                 if not is_real_game_folder(game_folder):
@@ -286,9 +285,21 @@ def launch_steam_game(game_name: str) -> str:
 def open_app(app_name: str) -> str:
     app_clean = app_name.lower().strip()
 
-    # 1. Protected apps
+    # 1. Roblox — dynamic path finder
+    if "roblox" in app_clean:
+        exe = find_roblox()
+        if exe:
+            launch_detached(exe)
+            return "Opening Roblox."
+        return "Couldn't find Roblox installed."
+
+    # 2. Protected apps — substring match only
     for key, path in PROTECTED_APPS.items():
         if key in app_clean or app_clean in key:
+            # URI-based apps (Microsoft Store)
+            if path.endswith(":"):
+                subprocess.Popen(f"explorer {path}", shell=True)
+                return f"Opening {key}."
             expanded = os.path.expandvars(path)
             if os.path.exists(expanded) and is_safe_exe(expanded):
                 launch_detached(expanded)
@@ -300,7 +311,7 @@ def open_app(app_name: str) -> str:
             except Exception:
                 pass
 
-    # 2. APP_MAP fuzzy
+    # 3. APP_MAP — fuzzy match
     best_key, best_score = None, 0
     for key in APP_MAP:
         score = fuzz.partial_ratio(app_clean, key)
@@ -316,12 +327,12 @@ def open_app(app_name: str) -> str:
             launch_detached(exe, args)
             return f"Opening {best_key}."
 
-    # 3. Steam library
+    # 4. Steam library
     result = launch_steam_game(app_clean)
     if "Couldn't find" not in result:
         return result
 
-    # 4. PC folder search
+    # 5. PC folder search
     return search_and_open(app_clean)
 
 def search_and_open(app_name: str) -> str:
@@ -373,12 +384,16 @@ def close_app(app_name: str) -> str:
 
 def open_website(url: str) -> str:
     SITE_MAP = {
-        "youtube": "youtube.com", "google": "google.com",
-        "reddit": "reddit.com", "github": "github.com",
-        "netflix": "netflix.com", "spotify": "open.spotify.com",
-        "twitter": "twitter.com", "x": "x.com",
-        "instagram": "instagram.com", "twitch": "twitch.tv",
-        "chatgpt": "chatgpt.com",
+        "youtube":   "youtube.com",
+        "google":    "google.com",
+        "reddit":    "reddit.com",
+        "github":    "github.com",
+        "netflix":   "netflix.com",
+        "twitter":   "twitter.com",
+        "x":         "x.com",
+        "instagram": "instagram.com",
+        "twitch":    "twitch.tv",
+        "chatgpt":   "chatgpt.com",
     }
     url = url.lower().strip()
     url = SITE_MAP.get(url, url)

@@ -2,7 +2,7 @@ import os
 import re
 import skills.app_launcher as al
 from groq import Groq
-from skills.app_launcher import open_app, open_website, close_app, launch_steam_game, STEAM_GAMES
+from skills.app_launcher import open_app, open_website, close_app, launch_steam_game
 from skills.system_controls import (volume_up, volume_down, mute, set_volume,
     media_play_pause, media_next, media_previous,
     shutdown, cancel_shutdown, restart, sleep_pc, get_battery, take_screenshot)
@@ -40,9 +40,10 @@ def handle_command(text: str):
     if "mute" in t:
         return mute()
 
-    # --- Media ---
-    if any(x in t for x in ["pause music", "pause media", "pause song",
-                              "resume music", "resume media", "play pause"]):
+    # --- Media (must be ABOVE game launcher to avoid "play music" → Steam) ---
+    if any(x in t for x in ["pause music", "pause song", "pause media",
+                              "resume music", "resume song", "resume media",
+                              "play music", "start music", "unpause"]):
         return media_play_pause()
     if any(x in t for x in ["next song", "next track", "skip song", "skip track"]):
         return media_next()
@@ -68,15 +69,14 @@ def handle_command(text: str):
     if "sleep" in t and any(x in t for x in ["pc", "computer", "laptop", "put"]):
         return sleep_pc()
 
-    # --- List Steam Games ---
+    # --- List / Refresh Steam Games ---
     if any(x in t for x in ["list games", "list steam", "what games", "which games", "my games"]):
         games = al.STEAM_GAMES
         if games:
             names = ", ".join(sorted(games.keys()))
-            return f"I found these Steam games: {names}."
+            return f"I found these games: {names}."
         return "I couldn't find any Steam games."
 
-    # --- Refresh Game Cache ---
     if any(x in t for x in ["refresh games", "rescan games", "update games", "scan games"]):
         al.STEAM_GAMES = al.refresh_games()
         return f"Done! Found {len(al.STEAM_GAMES)} games."
@@ -87,7 +87,37 @@ def handle_command(text: str):
         if app:
             return close_app(app)
 
-    # --- Websites (skip if it's a known installed app) ---
+    # --- Subreddit shortcut ---
+    subreddit_match = re.search(r'r/(\w+)', t)
+    if subreddit_match:
+        sub = subreddit_match.group(1)
+        return open_website(f"reddit.com/r/{sub}")
+
+    # --- YouTube channel search ---
+    yt_channel = re.search(r'open (.+?)(?:\'s)? (?:youtube channel|yt channel|channel on youtube)', t)
+    if yt_channel:
+        query = yt_channel.group(1).strip().replace(" ", "+")
+        return open_website(f"youtube.com/results?search_query={query}+channel")
+
+    # --- YouTube search ---
+    yt_search = re.search(r'(?:search|find|look up) (.+?) on youtube', t)
+    if yt_search:
+        query = yt_search.group(1).strip().replace(" ", "+")
+        return open_website(f"youtube.com/results?search_query={query}")
+
+    # --- Google search ---
+    google_match = re.search(r'^(?:google|search for|search) (.+)', t)
+    if google_match and "game" not in t and "steam" not in t:
+        query = google_match.group(1).strip().replace(" ", "+")
+        return open_website(f"google.com/search?q={query}")
+
+    # --- Spotify song search ---
+    spotify_song = re.search(r'(?:play|listen to|put on) (.+?) (?:on spotify|in spotify|on repeat)', t)
+    if spotify_song:
+        song = spotify_song.group(1).strip().replace(" ", "%20")
+        return open_website(f"open.spotify.com/search/{song}")
+
+    # --- Websites (skip known installed apps) ---
     website_triggers = [".com", ".org", ".net", ".io", ".tv",
                         "youtube", "google", "reddit", "github",
                         "netflix", "twitter", "instagram", "twitch", "chatgpt"]
@@ -100,12 +130,14 @@ def handle_command(text: str):
 
     # --- Steam Games (play/run/launch/start) ---
     if re.search(r'\b(play|launch|run|start)\b', t):
-        app = re.sub(r'\b(play|launch|run|start)\b', '', t).strip()
-        if app:
-            result = launch_steam_game(app)
-            if "Couldn't find" not in result:
-                return result
-            return open_app(app)
+        # Don't treat music/song commands as game launches
+        if not any(x in t for x in ["music", "song", "track", "media"]):
+            app = re.sub(r'\b(play|launch|run|start)\b', '', t).strip()
+            if app:
+                result = launch_steam_game(app)
+                if "Couldn't find" not in result:
+                    return result
+                return open_app(app)
 
     # --- Open Apps ---
     if re.search(r'^open .+', t):
@@ -126,7 +158,7 @@ def ask_llm(user_input):
                 f"You can open apps, websites, control volume, and answer questions. "
                 f"When asked to DO something on the computer, confirm you're doing it — don't give instructions. "
                 f"Keep responses short and conversational. "
-                f"Your actually detected Steam games are: {game_list}. "
+                f"Your detected Steam games are: {game_list}. "
                 f"ONLY list games from this exact list when asked. Never make up game names."
             )},
             *conversation_history
