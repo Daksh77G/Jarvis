@@ -40,7 +40,7 @@ def handle_command(text: str):
     if "mute" in t:
         return mute()
 
-    # --- Media controls (ABOVE game launcher) ---
+    # --- Media controls ---
     if any(x in t for x in ["pause music", "pause song", "pause media",
                               "resume music", "resume song", "resume media",
                               "play music", "start music", "unpause"]):
@@ -96,23 +96,38 @@ def handle_command(text: str):
     if subreddit_match:
         return open_website(f"reddit.com/r/{subreddit_match.group(1)}")
 
-    # --- Spotify: playlist ---
+    # --- Spotify: explicit playlist keyword ---
     playlist_match = re.search(r'(?:play|start|put on) (.+?) playlist', t)
     if playlist_match:
         return play_playlist(playlist_match.group(1).strip())
 
-    # --- Spotify: "play X on spotify" ---
+    # --- Spotify: "play X on/in spotify" ---
     spotify_explicit = re.search(
         r'(?:play|listen to|put on|search) (.+?) (?:on spotify|in spotify)', t)
     if spotify_explicit:
-        return play_song(spotify_explicit.group(1).strip())
+        query = spotify_explicit.group(1).strip()
+        if re.search(r'\bby\b', query):
+            return play_song(query)
+        return play_playlist(query)
 
-    # --- Spotify: "play X by Y" ---
+    # --- Spotify: "play X by Y" → specific song ---
     spotify_by = re.search(r'play (.+?) by (.+)', t)
     if spotify_by and not any(x in t for x in ["game", "steam", "launch", "video", "youtube"]):
         song = spotify_by.group(1).strip()
         artist = spotify_by.group(2).strip()
         return play_song(f"{song} {artist}")
+
+    # --- Spotify: "play X" with no "by" and no game/video context → playlist/genre ---
+    spotify_generic = re.search(r'^(?:play|put on|listen to) (.+?)$', t)
+    if spotify_generic and not any(x in t for x in ["game", "steam", "launch",
+                                                      "video", "youtube",
+                                                      "song", "track", "media"]):
+        query = spotify_generic.group(1).strip()
+        # Skip if it looks like a Steam game launch
+        result = launch_steam_game(query)
+        if result and "Couldn't find" not in result:
+            return result
+        return play_playlist(query)
 
     # --- YouTube: latest video ---
     yt_play = re.search(
@@ -156,11 +171,10 @@ def handle_command(text: str):
                     return open_website(clean)
 
     # --- Steam Games ---
-    if re.search(r'\b(play|launch|run|start)\b', t):
+    if re.search(r'\b(launch|run|start)\b', t):
         if not any(x in t for x in ["music", "song", "track", "media",
-                                     "spotify", "youtube", "video", "by ",
-                                     "playlist"]):
-            app = re.sub(r'\b(play|launch|run|start)\b', '', t).strip()
+                                     "spotify", "youtube", "video", "playlist"]):
+            app = re.sub(r'\b(launch|run|start)\b', '', t).strip()
             if app:
                 result = launch_steam_game(app)
                 if "Couldn't find" not in result:

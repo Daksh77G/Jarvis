@@ -35,41 +35,40 @@ def get_spotify():
         return None
 
 def _spotify_play_song(query: str):
-    """For specific songs — tab, enter, enter"""
+    """Specific song — escape, tab, enter, enter"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
         time.sleep(3.5)
-        pyautogui.press("escape")     # clear leftover focus
+        pyautogui.press("escape")
         time.sleep(0.2)
-        pyautogui.press("tab")        # focus first result
+        pyautogui.press("tab")
         time.sleep(0.2)
-        pyautogui.press("enter")      # open it
+        pyautogui.press("enter")
         time.sleep(0.2)
-        pyautogui.press("enter")      # play it
+        pyautogui.press("enter")
 
 def _spotify_play_playlist(query: str):
-    """For playlists/genres — tab, enter, tab, tab, enter"""
+    """Playlist/genre — escape, tab, enter, wait, tab, tab, enter"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
         time.sleep(3.5)
-        pyautogui.press("escape")     # clear leftover focus
+        pyautogui.press("escape")
         time.sleep(0.2)
-        pyautogui.press("tab")        # focus first result
+        pyautogui.press("tab")
         time.sleep(0.2)
-        pyautogui.press("enter")      # open playlist page
-        time.sleep(1.2)               # wait for playlist page to load
-        pyautogui.press("tab")        # tab into playlist content
+        pyautogui.press("enter")
+        time.sleep(1.2)
+        pyautogui.press("tab")
         time.sleep(0.2)
-        pyautogui.press("tab")        # tab to play button
+        pyautogui.press("tab")
         time.sleep(0.2)
-        pyautogui.press("enter")      # play it
+        pyautogui.press("enter")
 
 def play_song(query: str) -> str:
     sp = get_spotify()
 
-    # Premium path — full API control
     if sp:
         try:
             results = sp.search(q=query, type="track", limit=1)
@@ -92,32 +91,12 @@ def play_song(query: str) -> str:
         except Exception:
             pass
 
-    # Free account path
     _spotify_play_song(query)
     return f"Playing '{query}' on Spotify."
 
 def play_playlist(query: str) -> str:
     sp = get_spotify()
 
-    # Liked songs shortcut
-    if any(x in query.lower() for x in ["liked songs", "liked music", "my songs", "saved songs"]):
-        os.startfile("spotify:collection")
-        if PYAUTOGUI_AVAILABLE:
-            time.sleep(3.5)
-            pyautogui.press("escape")
-            time.sleep(0.2)
-            pyautogui.press("tab")
-            time.sleep(0.2)
-            pyautogui.press("enter")
-            time.sleep(1.2)
-            pyautogui.press("tab")
-            time.sleep(0.2)
-            pyautogui.press("tab")
-            time.sleep(0.2)
-            pyautogui.press("enter")
-        return "Playing your Liked Songs."
-
-    # Premium path
     if sp:
         try:
             results = sp.search(q=query, type="playlist", limit=1)
@@ -140,8 +119,8 @@ def play_playlist(query: str) -> str:
         except Exception:
             pass
 
-    # Free account path — playlist navigation
-    _spotify_play_playlist(f"playlist {query}")
+    # Free path — search everything including liked songs as a playlist
+    _spotify_play_playlist(query)
     return f"Playing '{query}' on Spotify."
 
 def get_current_song() -> str:
