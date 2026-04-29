@@ -35,12 +35,18 @@ def get_spotify():
         return None
 
 def _open_spotify_search(query: str):
-    """Open Spotify search URI and press Enter to play first result"""
+    """Open Spotify search, tab 3 times to reach play button, press enter"""
     q = query.replace(" ", "%20")
     os.startfile(f"spotify:search:{q}")
     if PYAUTOGUI_AVAILABLE:
-        time.sleep(3)       # wait for Spotify to load the search
-        pyautogui.press("enter")  # select first result
+        time.sleep(3.5)
+        pyautogui.press("tab")
+        time.sleep(0.2)
+        pyautogui.press("tab")
+        time.sleep(0.2)
+        pyautogui.press("tab")
+        time.sleep(0.2)
+        pyautogui.press("enter")
 
 def play_song(query: str) -> str:
     sp = get_spotify()
@@ -69,7 +75,7 @@ def play_song(query: str) -> str:
         except Exception:
             pass
 
-    # Free account path — search URI + auto Enter
+    # Free account path
     _open_spotify_search(query)
     return f"Playing '{query}' on Spotify."
 
@@ -99,7 +105,7 @@ def play_playlist(query: str) -> str:
         except Exception:
             pass
 
-    # Free account path — search + Enter
+    # Free account path
     _open_spotify_search(f"playlist {query}")
     return f"Playing playlist '{query}' on Spotify."
 
