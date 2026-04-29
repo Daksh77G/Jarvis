@@ -2,20 +2,24 @@ import subprocess
 import os
 import datetime
 
+
 def volume_up() -> str:
     subprocess.run(["powershell", "-command",
         "(New-Object -ComObject WScript.Shell).SendKeys([char]175)"])
     return "Volume increased."
+
 
 def volume_down() -> str:
     subprocess.run(["powershell", "-command",
         "(New-Object -ComObject WScript.Shell).SendKeys([char]174)"])
     return "Volume decreased."
 
+
 def mute() -> str:
     subprocess.run(["powershell", "-command",
         "(New-Object -ComObject WScript.Shell).SendKeys([char]173)"])
     return "Toggled mute."
+
 
 def set_volume(level: int) -> str:
     level = max(0, min(100, level))
@@ -32,36 +36,53 @@ def set_volume(level: int) -> str:
     except Exception as e:
         return f"Couldn't set volume: {e}"
 
+
 def media_play_pause() -> str:
     subprocess.run(["powershell", "-command",
-        "(New-Object -ComObject WScript.Shell).SendKeys([char]179)"])
+        "$wsh = New-Object -ComObject WScript.Shell; "
+        "$wsh.AppActivate('Spotify'); "
+        "Start-Sleep -Milliseconds 200; "
+        "$wsh.SendKeys([char]179)"])
     return "Toggled play/pause."
+
 
 def media_next() -> str:
     subprocess.run(["powershell", "-command",
-        "(New-Object -ComObject WScript.Shell).SendKeys([char]176)"])
+        "$wsh = New-Object -ComObject WScript.Shell; "
+        "$wsh.AppActivate('Spotify'); "
+        "Start-Sleep -Milliseconds 200; "
+        "$wsh.SendKeys([char]176)"])
     return "Skipped to next track."
+
 
 def media_previous() -> str:
     subprocess.run(["powershell", "-command",
-        "(New-Object -ComObject WScript.Shell).SendKeys([char]177)"])
+        "$wsh = New-Object -ComObject WScript.Shell; "
+        "$wsh.AppActivate('Spotify'); "
+        "Start-Sleep -Milliseconds 200; "
+        "$wsh.SendKeys([char]177)"])
     return "Went to previous track."
+
 
 def shutdown(delay: int = 10) -> str:
     os.system(f"shutdown /s /t {delay}")
     return f"Shutting down in {delay} seconds."
 
+
 def cancel_shutdown() -> str:
     os.system("shutdown /a")
     return "Shutdown cancelled."
+
 
 def restart() -> str:
     os.system("shutdown /r /t 0")
     return "Restarting..."
 
+
 def sleep_pc() -> str:
     os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
     return "Going to sleep."
+
 
 def get_battery() -> str:
     result = subprocess.run(
@@ -71,6 +92,7 @@ def get_battery() -> str:
     )
     level = result.stdout.strip()
     return f"Battery is at {level}%." if level else "No battery found (desktop PC)."
+
 
 def take_screenshot() -> str:
     filename = os.path.join(
