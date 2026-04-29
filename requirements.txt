@@ -1,7 +1,5 @@
-openai-whisper
-sounddevice
-openWakeWord
-rapidfuzz
+groq
+SpeechRecognition
 pyttsx3
-ollama
-pyautogui
+pyaudio
+rapidfuzz
